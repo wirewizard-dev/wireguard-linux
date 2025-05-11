@@ -108,7 +108,6 @@ func readConfig(name *C.char) *C.ConfigResponse {
       return nil
     }
 
-    //cfg := (*C.ConfigResponse)(C.malloc(C.size_t(unsafe.Sizeof(C.ConfigResponse{}))))
     cfg.InterfacePubKey = C.CString(interfacePubKey)
     cfg.PeerPubKey = C.CString(peerPubKey)
     return cfg
@@ -163,7 +162,6 @@ func readStats(name *C.char) *C.StatsResponse {
 
   peer := device.Peers[0]
 
-  //cfg := (*C.StatsResponse)(C.malloc(C.size_t(unsafe.Sizeof(C.StatsResponse{}))))
   cfg.LastHandshakeTime = C.CString(parseTime(peer.LastHandshakeTime.String()))
   cfg.Transfer = C.CString(parseTraffic(peer.ReceiveBytes, peer.TransmitBytes))
   return cfg
