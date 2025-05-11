@@ -1,7 +1,7 @@
 <div align="center">
 
 <picture>
-  <img alt="logo" src="/resources/images/application.png" width="50%" height="50%">
+  <img alt="logo" src="/resources/images/application.png" width="70%" height="70%">
 </picture>
 
 **wireguard-linux**: lightweight desktop application for managing WireGuard tunnels with an interface inspired by the official [wireguard-windows](https://github.com/WireGuard/wireguard-windows).
