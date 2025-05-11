@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WireGuard Linux
+Icon=/opt/wirewizard/resources/icons/default.png
+Exec=pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY /opt/wirewizard/bin/wireguard
+Comment=Unofficial clone of wireguard-windows
+Categories=Network;Security;
+Terminal=False
