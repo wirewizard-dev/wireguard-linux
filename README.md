@@ -9,14 +9,14 @@
 </div>
 
 ### What i use
-* Python 3.12.7+
+* Python 3.11
   * pyside6 6.9.0
   * pyinstaller 6.13.0
 * Go 1.24.0
 
 ### Install (Debian/Ubuntu)
 ```bash
-sudo apt install wireguard git
+sudo apt install wireguard-tools git
 
 git clone git@github.com:wirewizarddev/wireguard-linux.git
 cd wireguard-linux
@@ -32,5 +32,5 @@ python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
 
-sudo LOCAL=ON venv/bin/python3 wireguard.py
+sudo LOCAL=ON venv/bin/python3.11 wireguard.py
 ```

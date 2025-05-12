@@ -227,7 +227,7 @@ class TunnelCreationDialog(QDialog):
         border-radius: 3px;
       }
       QPushButton:hover {
-        background: #B3E5FC;
+        background: #dae7ed;
       }
       """
     )
@@ -277,7 +277,7 @@ class TunnelCreationDialog(QDialog):
         break
 
     if not self.config_dir:
-      QMessageBox.warning(self, "Error", "Configuration directories do not exist")
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
       return False
 
     if not os.access(self.config_dir, os.W_OK):
@@ -322,7 +322,7 @@ class TunnelEditDialog(QDialog):
         border-radius: 3px;
       }
       QPushButton:hover {
-        background: #B3E5FC;
+        background: #dae7ed;
       }
       """
     )
@@ -388,7 +388,7 @@ class TunnelButton(QPushButton):
     self.update_style()
 
   def update_style(self) -> None:
-    background = "#B3E5FC" if self.is_selected else "transparent"
+    background = "#dae7ed" if self.is_selected else "transparent"
 
     self.setStyleSheet(
       f"""
@@ -400,7 +400,7 @@ class TunnelButton(QPushButton):
         font-size: 13px;
       }}
       QPushButton:hover {{
-        background: #B3E5FC;
+        background: #dae7ed;
       }}
       """
     )
@@ -421,7 +421,14 @@ class TunnelButton(QPushButton):
     self.update_style()
 
 class TunnelConfigWidget(QWidget):
-  def __init__(self, name: str, config: dict, stats: dict, is_active: bool = False, parent=None):
+  def __init__(
+      self,
+      name: str,
+      config: dict,
+      stats: dict, 
+      is_active: bool = False,
+      parent=None
+  ):
     super().__init__(parent)
     self.layout = QVBoxLayout()
     self.layout.setContentsMargins(0, 0, 0, 0)
@@ -437,7 +444,7 @@ class TunnelConfigWidget(QWidget):
     interface_group.setStyleSheet(
       """
       QGroupBox {
-        border: 1px solid black;
+        border: 1px solid #ada9aa;
         margin-top: 10px;
         font-size: 12px;
       }
@@ -454,7 +461,6 @@ class TunnelConfigWidget(QWidget):
 
     status_layout = QHBoxLayout()
     status_label = QLabel("Status:")
-    status_label.setStyleSheet("font-weight: bold;")
     status_label.setFixedWidth(80)
     status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
     self.status_indicator = QLabel()
@@ -481,7 +487,6 @@ class TunnelConfigWidget(QWidget):
     for label_text, value in inteface_fields:
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
-      label.setStyleSheet("font-weight: bold;")
       label.setFixedWidth(80)
       label.setAlignment(Qt.AlignmentFlag.AlignRight)
       if value:
@@ -504,7 +509,7 @@ class TunnelConfigWidget(QWidget):
         border-radius: 3px;
       }
       QPushButton:hover {
-        background: #B3E5FC;
+        background: #dae7ed;
       }
       """
     )
@@ -519,7 +524,7 @@ class TunnelConfigWidget(QWidget):
     peer_group.setStyleSheet(
       """
       QGroupBox {
-        border: 1px solid black;
+        border: 1px solid #ada9aa;
         margin-top: 10px;
         font-size: 12px;
       }
@@ -545,7 +550,6 @@ class TunnelConfigWidget(QWidget):
     for label_text, value in peer_fields:
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
-      label.setStyleSheet("font-weight: bold;")
       label.setFixedWidth(80)
       label.setAlignment(Qt.AlignmentFlag.AlignRight)
       if value:
@@ -638,7 +642,9 @@ class MainWindow(QMainWindow):
     self.left_panel.setFrameShape(QFrame.Box)
     self.left_panel.setLineWidth(1)
     self.left_panel.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-    self.left_panel.customContextMenuRequested.connect(self.show_context_menu)
+    self.left_panel.customContextMenuRequested.connect(
+      lambda pos: self.show_context_menu(pos, from_button=False, sender=self.left_panel)
+    )
 
     self.left_widget = QWidget()
     self.left_layout = QVBoxLayout()
@@ -676,7 +682,7 @@ class MainWindow(QMainWindow):
 
     self.bottom_layout = QHBoxLayout()
     self.button_panel = QWidget()
-    self.button_panel.setStyleSheet("QPushButton:hover { background: #B3E5FC; }")
+    self.button_panel.setStyleSheet("QPushButton:hover { background: #dae7ed; }")
     self.buttons_layout = QHBoxLayout()
     self.buttons_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -719,9 +725,10 @@ class MainWindow(QMainWindow):
 
     self.tunnels_tab.setLayout(main_layout)
 
+  # TODO: (heycatch) add support for logs.
   def setup_logs_tab(self) -> None:
     layout = QVBoxLayout()
-    logs_text = QLabel("Logs are currently unsupported")
+    logs_text = QLabel("Logs are not available at this time")
     logs_text.setStyleSheet("font-weight: bold; font-size: 18px;")
     layout.addWidget(logs_text, alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -739,15 +746,13 @@ class MainWindow(QMainWindow):
 
     super().resizeEvent(event)
 
-  def has_active_tunnel(self) -> bool:
+  def set_icon(self) -> None:
+    is_active = False
     for interface in self.wireguard.read_interfaces_name():
       config = self.wireguard.read_config(interface)
-      if config.get("interface_listen_port", 0) != 0: return True
-
-    return False
-
-  def set_icon(self) -> None:
-    is_active = self.has_active_tunnel()
+      if config.get("interface_listen_port", 0) != 0:
+        is_active = True
+        break
 
     self.setWindowIcon(QIcon(
       self.active_icon if is_active else self.default_icon
@@ -766,7 +771,7 @@ class MainWindow(QMainWindow):
         try:
             subprocess.run(["wg-quick", "down", interface], check=True)
         except subprocess.CalledProcessError as e:
-          QMessageBox.warning(self, "Error", f"Failied to stop tunnel: {str(e)}")
+          QMessageBox.warning(self, "Error", f"Failed to stop tunnel: {str(e)}")
 
     QApplication.quit()
 
@@ -790,6 +795,12 @@ class MainWindow(QMainWindow):
         name, is_active=config.get("interface_listen_port", 0) != 0
       )
       button.clicked.connect(lambda _, n=name: self.show_tunnel(n))
+      button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+      button.customContextMenuRequested.connect(
+        lambda pos, n=name, b=button: self.show_context_menu(
+          pos, from_button=True, tunnel_name=n, sender=b
+        )
+      )
 
       self.left_layout.addWidget(button)
 
@@ -797,30 +808,126 @@ class MainWindow(QMainWindow):
 
     self.left_layout.addStretch()
 
-  # TODO: (heycatch) upgrade logic in show_contenxt_menu.
-  def show_context_menu(self, position: QPoint) -> None:
+  def show_context_menu(
+      self,
+      position: QPoint,
+      from_button: bool = False,
+      tunnel_name: str = None,
+      sender: QWidget = None
+  ) -> None:
+    self.selected_tunnel = tunnel_name
     menu = QMenu(self)
 
-    toggle_action = menu.addAction("Toggle")
-    toggle_action.setEnabled(False)
+    len_interfaces = len(self.wireguard.read_interfaces_name())
 
-    menu.addSeparator()
+    if from_button and tunnel_name:
+      self.selected_tunnel = tunnel_name
+      for i in range(self.left_layout.count()):
+        widget = self. left_layout.itemAt(i).widget()
+        if isinstance(widget, TunnelButton):
+          widget.set_selected(widget.text() == tunnel_name)
 
-    menu.addAction("Import tunnel(s) from file...", self.import_tunnels)
-    menu.addAction("Add empty tunnel...", self.create_tunnel)
-    export_action = menu.addAction("Export all tunnels to zip...")
-    export_action.setEnabled(False)
+      toggle_action = menu.addAction("Toggle")
+      toggle_action.setEnabled(
+        len_interfaces > 1 and self.selected_tunnel is not None
+      )
+      toggle_action.triggered.connect(self.toggle_selected_tunnel)
 
-    menu.addSeparator()
+      menu.addSeparator()
 
-    edit_action = menu.addAction("Edit selected tunnel...")
-    edit_action.setEnabled(False)
-    remove_action = menu.addAction("Remove selected tunnel(s)...")
-    remove_action.setEnabled(False)
-    select_all_action = menu.addAction("Select all")
-    select_all_action.setEnabled(False)
+      import_action = menu.addAction("Import tunnel(s) from file...")
+      import_action.setEnabled(False)
+      add_action = menu.addAction("Add empty tunnel...")
+      add_action.setEnabled(False)
+      export_action = menu.addAction("Export all tunnels to zip...")
+      export_action.setEnabled(False)
 
-    menu.exec(self.tunnels_tab.mapToGlobal(position))
+      menu.addSeparator()
+
+      edit_action = menu.addAction("Edit selected tunnel...")
+      edit_action.setEnabled(
+        len_interfaces > 0 and self.selected_tunnel is not None
+      )
+      edit_action.triggered.connect(lambda: self.edit_tunnel())
+      remove_action = menu.addAction("Remove selected tunnel(s)...")
+      remove_action.setEnabled(
+        len_interfaces > 0 and self.selected_tunnel is not None
+      )
+      remove_action.triggered.connect(self.remove_tunnel)
+
+      select_all_action = menu.addAction("Select all")
+      select_all_action.setEnabled(False)
+    else:
+      toggle_action = menu.addAction("Toggle")
+      toggle_action.setEnabled(False)
+
+      menu.addSeparator()
+
+      menu.addAction("Import tunnel(s) from file...", self.import_tunnels)
+      menu.addAction("Add empty tunnel...", self.create_tunnel)
+      export_action = menu.addAction("Export all tunnels to zip...")
+      export_action.setEnabled(len_interfaces > 0)
+      export_action.triggered.connect(self.export_tunnels)
+
+      menu.addSeparator()
+
+      edit_action = menu.addAction("Edit selected tunnel...")
+      edit_action.setEnabled(False)
+      remove_action = menu.addAction("Remove selected tunnel(s)...")
+      remove_action.setEnabled(False)
+
+      # TODO: (heycatch) create a select_all_action button.
+      select_all_action = menu.addAction("Select all (Not available yet)")
+      select_all_action.setEnabled(False)
+
+    if sender:
+      menu.exec(sender.mapToGlobal(position))
+    else:
+      menu.exec(self.left_panel.mapToGlobal(position))
+
+  def toggle_selected_tunnel(self) -> None:
+    if not self.selected_tunnel: return
+
+    active_tunnel = None
+    for interface in self.wireguard.read_interfaces_name():
+      config = self.wireguard.read_config(interface)
+      if config.get("interface_listen_port", 0) != 0:
+        active_tunnel = interface
+        break
+
+    if active_tunnel == self.selected_tunnel: return
+
+    if active_tunnel:
+      try:
+        subprocess.run(["wg-quick", "down", active_tunnel], check=True)
+      except subprocess.CalledProcessError as e:
+        QMessageBox.warning(
+          self,
+          "Error",
+          f"Failed to stop tunnel {active_tunnel}: {str(e)}"
+        )
+        return
+
+    try:
+      subprocess.run(["wg-quick", "up", self.selected_tunnel], check=True)
+    except subprocess.CalledProcessError as e:
+      QMessageBox.warning(
+        self,
+        "Error",
+        f"Failed to start tunnel {self.selected_tunnel}: {str(e)}"
+      )
+      return
+
+    for i in range(self.left_layout.count()):
+      widget = self.left_layout.itemAt(i).widget()
+      if isinstance(widget, TunnelButton):
+        config = self.wireguard.read_config(widget.text())
+        widget.is_active = config.get("interface_listen_port", 0) != 0
+        widget.update()
+
+    self.set_icon()
+
+    self.show_tunnel(self.selected_tunnel)
 
   def create_tunnel(self) -> None:
     priv_key, pub_key = self.wireguard.generate_keys()
@@ -858,7 +965,7 @@ class MainWindow(QMainWindow):
     stats = self.wireguard.read_stats(name)
 
     if len(config) == 0 and len(stats) == 0:
-      QMessageBox.warning(self, "Error", "Falied to read the configuration file")
+      QMessageBox.warning(self, "Error", "Failed to read the configuration file")
 
       import_btn = QPushButton("Import tunnel(s) from file")
       import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
@@ -868,7 +975,7 @@ class MainWindow(QMainWindow):
       self.right_layout.addStretch()
       self.right_panel.setLayout(self.right_layout)
 
-      self.set_icon(False)
+      self.set_icon()
 
       return
 
@@ -889,7 +996,7 @@ class MainWindow(QMainWindow):
         border-radius: 3px;
       }
       QPushButton:hover {
-        background: #B3E5FC;
+        background: #dae7ed;
       }
       """
     )
@@ -911,7 +1018,7 @@ class MainWindow(QMainWindow):
       else:
         subprocess.run(["wg-quick", "down", self.selected_tunnel], check=True)
     except subprocess.CalledProcessError as e:
-      QMessageBox.warning(self, "Error", f"Failied to toggle tunnel: {str(e)}")
+      QMessageBox.warning(self, "Error", f"Failed to toggle tunnel: {str(e)}")
       return
 
     for i in range(self.left_layout.count()):
@@ -1001,7 +1108,7 @@ class MainWindow(QMainWindow):
           break
 
       if not config_dir:
-        QMessageBox.warning(self, "Error", "Configuration directories do not exist")
+        QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
         return
 
       if not os.access(config_dir, os.W_OK):
@@ -1062,7 +1169,7 @@ class MainWindow(QMainWindow):
         break
 
     if not config_dir:
-      QMessageBox.warning(self, "Error", "Configuration directories do not exist")
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
       return
 
     conf_files = [f for f in os.listdir(config_dir) if f.endswith(".conf")]

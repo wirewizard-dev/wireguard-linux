@@ -9,9 +9,9 @@ sdk:
 install:
 	@sudo mkdir -p /opt/wirewizard/bin /opt/wirewizard/lib
 	@sudo cp -r resources/ /opt/wirewizard/
-	@sudo cp desktop/wireguard-linux.desktop /usr/share/applications/
+	@sudo cp desktop/pkexec/wireguard-linux.desktop /usr/share/applications/
 	@sudo cp wirewizard.so /opt/wirewizard/lib/
-	@sudo cp wireguard /opt/wirewizard/bin/
+	@sudo cp dist/wireguard /opt/wirewizard/bin/
 
 uninstall:
 	@sudo rm -rf /opt/wirewizard
