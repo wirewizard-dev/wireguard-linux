@@ -460,7 +460,7 @@ class TunnelConfigWidget(QWidget):
     self.status_indicator = QLabel()
     self.status_indicator.setFixedSize(12, 12)
     self.status_indicator.setStyleSheet(
-      f"background-color: {"#4CAF50" if is_active else "#808080"}; border-radius: 5px;"
+      f"background-color: {'#4CAF50' if is_active else '#808080'}; border-radius: 5px;"
     )
     status_text = QLabel("Active" if is_active else "Inactive")
     status_layout.addWidget(status_label)

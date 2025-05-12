@@ -21,7 +21,7 @@ clear:
 	rm wireguard.spec && rm -rf build/ dist/
 
 dev:
-	sudo LOCAL=ON venv/bin/python3.12 wireguard.py
+	sudo LOCAL=ON venv/bin/python3.11 wireguard.py
 
 memory:
 	@PID=$$(ps aux | grep [w]ireguard | head -n 1 | awk '{print $$2}') && \
