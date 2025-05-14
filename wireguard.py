@@ -262,11 +262,11 @@ class TunnelCreationDialog(QDialog):
       QMessageBox.warning(self, "Error", "Tunnel name cannot be empty")
       return False
 
-    if not re.match(r"^[a-zA-Z0-9-]+$", name):
+    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
         "Error",
-        "Tunnel name can only containt letters, numbers and hyphens"
+        "Incorrect name for the tunnel is entered"
       )
       return False
 
@@ -289,7 +289,11 @@ class TunnelCreationDialog(QDialog):
       return
 
     if os.path.isfile(os.path.join(self.config_dir, f"{name}.conf")):
-      QMessageBox.warning(self, "Error", f"Configuration file for {name} already exists")
+      QMessageBox.warning(
+        self,
+        "Error",
+        f"Configuration file for {name} already exists"
+      )
       return False
 
     return True
