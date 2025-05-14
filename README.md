@@ -4,14 +4,14 @@
   <img alt="logo" src="/resources/images/application.png" width="70%" height="70%">
 </picture>
 
-**wireguard-linux**: lightweight desktop application for managing WireGuard tunnels with an interface inspired by the official [wireguard-windows](https://github.com/WireGuard/wireguard-windows).
+</br>
+
+**wireguard-linux**: lightweight desktop application for managing WireGuard tunnels.
 
 </div>
 
 ### What i use
 * Python 3.11
-  * pyside6 6.9.0
-  * pyinstaller 6.13.0
 * Go 1.24.0
 
 ### Install (Debian/Ubuntu)

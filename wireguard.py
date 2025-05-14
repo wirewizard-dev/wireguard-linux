@@ -4,6 +4,7 @@ import re
 import sys
 import subprocess
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Tuple, List
 
@@ -43,6 +44,10 @@ from PySide6.QtGui import (
 
 class Config:
   _local_mode = os.getenv("LOCAL") == "ON"
+
+  @classmethod
+  def get_data(cls) -> str:
+    return f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
 
   @classmethod
   def get_icons(cls) -> Tuple[str, str]:
@@ -246,26 +251,28 @@ class TunnelCreationDialog(QDialog):
 
     try:
       with open(
-        os.path.join(self.config_dir, f"{name}.conf"),
-        "w",
-        encoding="utf-8"
+        os.path.join(self.config_dir, f"{name}.conf"), "w", encoding="utf-8"
       ) as f:
         f.write(self.text_edit.toPlainText())
 
         self.accept()
     except Exception as e:
-      QMessageBox.warning(self, "Error", f"Failed to save configuration file: {str(e)}")
+      QMessageBox.warning(
+        self,
+        "Error",
+        f"Failed to save configuration file: {str(e)}"
+      )
 
   def validate_config(self, name: str) -> bool:
     if not name:
-      QMessageBox.warning(self, "Error", "Tunnel name cannot be empty")
+      QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
     if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
         "Error",
-        "Incorrect name for the tunnel is entered"
+        "Incorrect name for the tunnel is entered."
       )
       return False
 
@@ -276,14 +283,14 @@ class TunnelCreationDialog(QDialog):
         break
 
     if not self.config_dir:
-      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist.")
       return False
 
     if not os.access(self.config_dir, os.W_OK):
       QMessageBox.warning(
         self,
         "Error",
-        f"No write permission for {self.config_dir}"
+        f"No write permission for {self.config_dir}."
       )
       return False
 
@@ -291,19 +298,21 @@ class TunnelCreationDialog(QDialog):
       QMessageBox.warning(
         self,
         "Error",
-        f"Configuration file for {name} already exists"
+        f"Configuration file for {name} already exists."
       )
       return False
 
     return True
 
 class TunnelEditDialog(QDialog):
-  def __init__(self, tunnel_name: str, wireguard: Wireguard, parent=None):
+  def __init__(self, tunnel_name: str, wireguard: Wireguard, logs: str, parent=None):
     super().__init__(parent)
     self.setWindowTitle("Edit tunnel")
     self.setFixedSize(500, 400)
 
     self.wireguard = wireguard
+
+    self.logs = logs
 
     self.tunnel_name = tunnel_name
     self.config_file = None
@@ -363,7 +372,7 @@ class TunnelEditDialog(QDialog):
       QMessageBox.warning(
         self,
         "Error",
-        f"Configuration file for {self.tunnel_name} not found",
+        f"Configuration file for {self.tunnel_name} not found.",
       )
       self.reject()
       return
@@ -388,12 +397,16 @@ class TunnelEditDialog(QDialog):
         config = self.wireguard.read_config(self.tunnel_name)
         if config.get("interface_listen_port", 0) != 0:
           try:
-            subprocess.run(["wg-quick", "down", self.tunnel_name], check=True)
+            cmd = ["wg-quick", "down", self.tunnel_name]
+            res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
           except subprocess.CalledProcessError as e:
+            self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+
             QMessageBox.warning(
               self,
               "Error",
-              f"Failed to stop tunnel {self.tunnel_name}: {str(e)}"
+              f"Failed to stop tunnel {self.tunnel_name}."
             )
             return
 
@@ -415,14 +428,14 @@ class TunnelEditDialog(QDialog):
 
   def validate_config(self, name: str) -> bool:
     if not name:
-      QMessageBox.warning(self, "Error", "Tunnel name cannot be empty")
+      QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
     if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
         "Error",
-        "Incorrect name for the tunnel is entered"
+        "Incorrect name for the tunnel is entered."
       )
       return False
 
@@ -433,14 +446,14 @@ class TunnelEditDialog(QDialog):
         break
 
     if not self.config_dir:
-      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist.")
       return False
 
     if not os.access(self.config_dir, os.W_OK):
       QMessageBox.warning(
         self,
         "Error",
-        f"No write permission for {self.config_dir}"
+        f"No write permission for {self.config_dir}."
       )
       return False
 
@@ -450,7 +463,7 @@ class TunnelEditDialog(QDialog):
       QMessageBox.warning(
         self,
         "Error",
-        f"Configuration file for {name} already exists"
+        f"Configuration file for {name} already exists."
       )
       return False
 
@@ -675,6 +688,7 @@ class MainWindow(QMainWindow):
 
     self.wireguard = Wireguard()
 
+    self.logs = ""
     self.edit_button = None
     self.selected_tunnel = None
     self.selected_button = None
@@ -804,14 +818,72 @@ class MainWindow(QMainWindow):
 
     self.tunnels_tab.setLayout(main_layout)
 
-  # TODO: (heycatch) add support for logs.
   def setup_logs_tab(self) -> None:
     layout = QVBoxLayout()
-    logs_text = QLabel("Logs are not available at this time")
-    logs_text.setStyleSheet("font-weight: bold; font-size: 18px;")
-    layout.addWidget(logs_text, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    log_frame = QFrame()
+    log_frame.setLineWidth(1)
+
+    log_layout = QVBoxLayout()
+    log_layout.setContentsMargins(0, 0, 0, 0)
+
+    self.logs_text = QTextEdit()
+    self.logs_text.setReadOnly(True)
+    self.logs_text.setFontFamily("Monospace")
+    self.logs_text.setFontPointSize(10)
+    self.logs_text.setPlainText(self.logs)
+    log_layout.addWidget(self.logs_text)
+
+    log_frame.setLayout(log_layout)
+    layout.addWidget(log_frame)
+
+    button_layout = QHBoxLayout()
+    button_layout.addStretch()
+    save_button = QPushButton("Save")
+    save_button.setFixedSize(100, 25)
+    save_button.setStyleSheet(
+      """
+      QPushButton {
+        padding: 5px;
+        border: 1px solid #4FC3F7;
+        border-radius: 3px;
+      }
+      QPushButton:hover {
+        background: #dae7ed;
+      }
+      """
+    )
+    save_button.clicked.connect(self.save_logs)
+    button_layout.addWidget(save_button)
+
+    layout.addLayout(button_layout)
 
     self.logs_tab.setLayout(layout)
+
+  def save_logs(self) -> None:
+    if not self.logs:
+      QMessageBox.warning(self, "Error", "The logs are empty.")
+      return
+
+    file_dialog = QFileDialog(self)
+    file_dialog.setAcceptMode(QFileDialog.AcceptSave)
+    file_dialog.setNameFilter("Log files (*.log)")
+    file_dialog.setDefaultSuffix("log")
+    file_dialog.selectFile("wireguard-linux.log")
+
+    if file_dialog.exec():
+      file_path = file_dialog.selectedFiles()[0]
+      try:
+        with open(file_path, "w", encoding="utf-8") as f:
+          f.write(self.logs)
+
+        QMessageBox.information(
+          self,
+          "Success",
+          f"The logs have been saved in {file_path}."
+        )
+      except Exception as e:
+        QMessageBox.warning(self, "Error", f"Couldn't save logs: {str(e)}")
 
   def closeEvent(self, event: QCloseEvent) -> None:
     event.ignore()
@@ -848,9 +920,9 @@ class MainWindow(QMainWindow):
       config = self.wireguard.read_config(interface)
       if config.get("interface_listen_port", 0) != 0:
         try:
-            subprocess.run(["wg-quick", "down", interface], check=True)
-        except subprocess.CalledProcessError as e:
-          QMessageBox.warning(self, "Error", f"Failed to stop tunnel: {str(e)}")
+          subprocess.run(["wg-quick", "down", interface], check=True)
+        except subprocess.CalledProcessError:
+          QMessageBox.warning(self, "Error", f"Failed to stop tunnel {interface}.")
 
     QApplication.quit()
 
@@ -979,22 +1051,29 @@ class MainWindow(QMainWindow):
 
     if active_tunnel:
       try:
-        subprocess.run(["wg-quick", "down", active_tunnel], check=True)
+        cmd = ["wg-quick", "down", active_tunnel]
+        res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+        if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
       except subprocess.CalledProcessError as e:
-        QMessageBox.warning(
-          self,
-          "Error",
-          f"Failed to stop tunnel {active_tunnel}: {str(e)}"
-        )
+        self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+        if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
+        QMessageBox.warning(self, "Error", f"Failed to stop tunnel {active_tunnel}.")
         return
 
     try:
-      subprocess.run(["wg-quick", "up", self.selected_tunnel], check=True)
+      cmd = ["wg-quick", "up", self.selected_tunnel]
+      res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
     except subprocess.CalledProcessError as e:
+      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
       QMessageBox.warning(
         self,
-        "Error",
-        f"Failed to start tunnel {self.selected_tunnel}: {str(e)}"
+        "Error", "Failed to start tunnel, most likely an error in the configuration file."
       )
       return
 
@@ -1040,7 +1119,6 @@ class MainWindow(QMainWindow):
 
     while self.right_layout.count():
       item = self.right_layout.takeAt(0)
-
       if item.widget(): item.widget().deleteLater()
 
     if self.edit_button:
@@ -1052,7 +1130,7 @@ class MainWindow(QMainWindow):
     stats = self.wireguard.read_stats(name)
 
     if len(config) == 0 and len(stats) == 0:
-      QMessageBox.warning(self, "Error", "Failed to read the configuration file")
+      QMessageBox.warning(self, "Error", "Failed to read the configuration file.")
 
       import_btn = QPushButton("Import tunnel(s) from file")
       import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
@@ -1093,8 +1171,11 @@ class MainWindow(QMainWindow):
     self.bottom_layout.addWidget(self.edit_button)
 
   def edit_tunnel(self) -> None:
-    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self)
+    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self.logs, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
+      self.logs = dialog.logs
+      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
       self.load_interfaces()
 
       if dialog.name_input.text().strip() in self.wireguard.read_interfaces_name():
@@ -1107,12 +1188,20 @@ class MainWindow(QMainWindow):
 
     new_state = not is_active
     try:
-      if new_state:
-        subprocess.run(["wg-quick", "up", self.selected_tunnel], check=True)
-      else:
-        subprocess.run(["wg-quick", "down", self.selected_tunnel], check=True)
+      if new_state: cmd = ["wg-quick", "up", self.selected_tunnel]
+      else: cmd = ["wg-quick", "down", self.selected_tunnel]
+      res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
     except subprocess.CalledProcessError as e:
-      QMessageBox.warning(self, "Error", f"Failed to toggle tunnel: {str(e)}")
+      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
+      QMessageBox.warning(
+        self,
+        "Error",
+        "Failed to toggle tunnel, most likely an error in the configuration file."
+      )
       return
 
     for i in range(self.left_layout.count()):
@@ -1148,13 +1237,15 @@ class MainWindow(QMainWindow):
           check_tunnel = self.wireguard.read_config(tunnel)
           if check_tunnel.get("interface_listen_port", 0) != 0:
             try:
-              subprocess.run(["wg-quick", "down", tunnel], check=True)
+              cmd = ["wg-quick", "down", tunnel]
+              res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+              self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+              if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
             except subprocess.CalledProcessError as e:
-              QMessageBox.warning(
-                self,
-                "Error",
-                f"Failed to stop tunnel {tunnel}: {str(e)}"
-              )
+              self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+              if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
+              QMessageBox.warning(self, "Error", f"Failed to stop tunnel {tunnel}.")
               continue
 
           for config in ["/etc/wireguard", "/usr/local/etc/wireguard"]:
@@ -1167,7 +1258,7 @@ class MainWindow(QMainWindow):
                   QMessageBox.warning(
                     self,
                     "Error",
-                    f"No delete permission for {path}"
+                    f"No delete permission for {path}."
                   )
                   continue
 
@@ -1199,12 +1290,18 @@ class MainWindow(QMainWindow):
               check_tunnel = self.wireguard.read_config(self.selected_tunnel)
               if check_tunnel.get("interface_listen_port", 0) != 0:
                 try:
-                  subprocess.run(["wg-quick", "down", self.selected_tunnel], check=True)
+                  cmd = ["wg-quick", "down", self.selected_tunnel]
+                  res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                  self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+                  if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
                 except subprocess.CalledProcessError as e:
+                  self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+                  if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
                   QMessageBox.warning(
                     self,
                     "Error",
-                    f"Failed to stop tunnel {self.selected_tunnel}: {str(e)}"
+                    f"Failed to stop tunnel {self.selected_tunnel}."
                   )
                   break
 
@@ -1212,7 +1309,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                   self,
                   "Error",
-                  f"No delete permission for {path}"
+                  f"No delete permission for {path}."
                 )
                 break
 
@@ -1265,14 +1362,14 @@ class MainWindow(QMainWindow):
           break
 
       if not config_dir:
-        QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
+        QMessageBox.warning(self, "Error", "Configuration dirs do not exist.")
         return
 
       if not os.access(config_dir, os.W_OK):
         QMessageBox.warning(
           self,
           "Error",
-          f"No import permission for {config_dir}"
+          f"No import permission for {config_dir}."
         )
         return
 
@@ -1309,12 +1406,12 @@ class MainWindow(QMainWindow):
       QMessageBox.information(
         self,
         "Success",
-        f"Successfully imported {count} tunnel(s)"
+        f"Successfully imported {count} tunnel(s)."
       )
 
       self.load_interfaces()
     else:
-      QMessageBox.warning(self, "Error", "No files were imported")
+      QMessageBox.warning(self, "Error", "No files were imported.")
 
   def export_tunnels(self) -> None:
     config_dir = None
@@ -1326,12 +1423,12 @@ class MainWindow(QMainWindow):
         break
 
     if not config_dir:
-      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist.")
       return
 
     conf_files = [f for f in os.listdir(config_dir) if f.endswith(".conf")]
     if not conf_files:
-      QMessageBox.warning(self, "Error", "Configuration files do not exist")
+      QMessageBox.warning(self, "Error", "Configuration files do not exist.")
       return
 
     file_dialog = QFileDialog(self)
@@ -1353,7 +1450,7 @@ class MainWindow(QMainWindow):
       QMessageBox.information(
         self,
         "Success",
-        f"Successfully exported {len(conf_files)} configurations to:\n{zip_path}"
+        f"Successfully exported {len(conf_files)} configurations to:\n{zip_path}."
       )
     except Exception as e:
       QMessageBox.warning(
