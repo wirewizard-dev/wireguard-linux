@@ -242,7 +242,6 @@ class TunnelCreationDialog(QDialog):
 
   def save_config(self) -> None:
     name = self.name_input.text().strip()
-
     if not self.validate_config(name): return
 
     try:
@@ -286,7 +285,7 @@ class TunnelCreationDialog(QDialog):
         "Error",
         f"No write permission for {self.config_dir}"
       )
-      return
+      return False
 
     if os.path.isfile(os.path.join(self.config_dir, f"{name}.conf")):
       QMessageBox.warning(
@@ -299,22 +298,33 @@ class TunnelCreationDialog(QDialog):
     return True
 
 class TunnelEditDialog(QDialog):
-  def __init__(self, tunnel_name: str, parent=None):
+  def __init__(self, tunnel_name: str, wireguard: Wireguard, parent=None):
     super().__init__(parent)
-    self.setWindowTitle(f"Edit the tunnel {tunnel_name}")
+    self.setWindowTitle("Edit tunnel")
     self.setFixedSize(500, 400)
+
+    self.wireguard = wireguard
 
     self.tunnel_name = tunnel_name
     self.config_file = None
+    self.config_dir = None
+    self.name_input = None
 
     self.init_ui()
 
   def init_ui(self) -> None:
     layout = QVBoxLayout()
 
+    form_layout = QFormLayout()
+
+    self.name_input = QLineEdit()
+    self.name_input.setText(self.tunnel_name)
+    form_layout.addRow("Name:", self.name_input)
+
     self.text_edit = QTextEdit()
     self.text_edit.setFontFamily("Monospace")
     self.text_edit.setFontPointSize(10)
+    layout.addLayout(form_layout)
     layout.addWidget(self.text_edit)
 
     button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -370,7 +380,27 @@ class TunnelEditDialog(QDialog):
       self.reject()
 
   def save_config(self) -> None:
+    new_name = self.name_input.text().strip()
+    if not self.validate_config(new_name): return
+
     try:
+      if new_name != self.tunnel_name:
+        config = self.wireguard.read_config(self.tunnel_name)
+        if config.get("interface_listen_port", 0) != 0:
+          try:
+            subprocess.run(["wg-quick", "down", self.tunnel_name], check=True)
+          except subprocess.CalledProcessError as e:
+            QMessageBox.warning(
+              self,
+              "Error",
+              f"Failed to stop tunnel {self.tunnel_name}: {str(e)}"
+            )
+            return
+
+        new_config_path = os.path.join(self.config_dir, f"{new_name}.conf")
+        os.rename(self.config_file, new_config_path)
+        self.config_file = new_config_path
+
       with open(self.config_file, "w", encoding="utf-8") as f:
         f.write(self.text_edit.toPlainText())
 
@@ -382,6 +412,49 @@ class TunnelEditDialog(QDialog):
         f"Failed to save configuration file: {str(e)}"
       )
       self.reject()
+
+  def validate_config(self, name: str) -> bool:
+    if not name:
+      QMessageBox.warning(self, "Error", "Tunnel name cannot be empty")
+      return False
+
+    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
+      QMessageBox.warning(
+        self,
+        "Error",
+        "Incorrect name for the tunnel is entered"
+      )
+      return False
+
+    folders = ["/etc/wireguard", "/usr/local/etc/wireguard"]
+    for folder in folders:
+      if os.path.isdir(folder):
+        self.config_dir = folder
+        break
+
+    if not self.config_dir:
+      QMessageBox.warning(self, "Error", "Configuration dirs do not exist")
+      return False
+
+    if not os.access(self.config_dir, os.W_OK):
+      QMessageBox.warning(
+        self,
+        "Error",
+        f"No write permission for {self.config_dir}"
+      )
+      return False
+
+    if name != self.tunnel_name and os.path.isfile(
+      os.path.join(self.config_dir, f"{name}.conf")
+    ):
+      QMessageBox.warning(
+        self,
+        "Error",
+        f"Configuration file for {name} already exists"
+      )
+      return False
+
+    return True
 
 class TunnelButton(QPushButton):
   def __init__(self, name: str, is_active: bool = False, parent=None):
@@ -426,18 +499,19 @@ class TunnelButton(QPushButton):
 
 class TunnelConfigWidget(QWidget):
   def __init__(
-      self,
-      name: str,
-      config: dict,
-      stats: dict,
-      is_active: bool = False,
-      parent=None
+    self,
+    name: str,
+    config: dict,
+    stats: dict,
+    wireguard: Wireguard,
+    is_active: bool = False,
+    parent=None
   ):
     super().__init__(parent)
     self.layout = QVBoxLayout()
     self.layout.setContentsMargins(0, 0, 0, 0)
 
-    self.wireguard = Wireguard()
+    self.wireguard = wireguard
 
     self.name = name
     self.is_active = is_active
@@ -815,11 +889,11 @@ class MainWindow(QMainWindow):
     self.left_layout.addStretch()
 
   def show_context_menu(
-      self,
-      position: QPoint,
-      from_button: bool = False,
-      tunnel_name: str = None,
-      sender: QWidget = None
+    self,
+    position: QPoint,
+    from_button: bool = False,
+    tunnel_name: str = None,
+    sender: QWidget = None
   ) -> None:
     self.selected_tunnel = tunnel_name
     menu = QMenu(self)
@@ -993,7 +1067,9 @@ class MainWindow(QMainWindow):
       return
 
     is_active = config.get("interface_listen_port", 0) != 0
-    config_widget = TunnelConfigWidget(name, config, stats, is_active=is_active)
+    config_widget = TunnelConfigWidget(
+      name, config, stats, self.wireguard, is_active=is_active
+    )
     config_widget.active_button.clicked.connect(
       lambda: self.toggle_tunnel(is_active)
     )
@@ -1017,9 +1093,14 @@ class MainWindow(QMainWindow):
     self.bottom_layout.addWidget(self.edit_button)
 
   def edit_tunnel(self) -> None:
-    dialog = TunnelEditDialog(self.selected_tunnel, self)
+    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
-      self.show_tunnel(self.selected_tunnel)
+      self.load_interfaces()
+
+      if dialog.name_input.text().strip() in self.wireguard.read_interfaces_name():
+        self.show_tunnel(dialog.name_input.text().strip())
+      else:
+        self.show_tunnel(self.selected_tunnel)
 
   def toggle_tunnel(self, is_active: bool) -> None:
     if not self.selected_tunnel: return
