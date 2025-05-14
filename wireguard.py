@@ -425,7 +425,7 @@ class TunnelConfigWidget(QWidget):
       self,
       name: str,
       config: dict,
-      stats: dict, 
+      stats: dict,
       is_active: bool = False,
       parent=None
   ):
@@ -600,6 +600,7 @@ class MainWindow(QMainWindow):
     self.edit_button = None
     self.selected_tunnel = None
     self.selected_button = None
+    self.selected_tunnels = []
 
     self.tray_icon = QSystemTrayIcon(self)
     self.tray_icon.setIcon(QIcon(self.default_icon))
@@ -776,8 +777,9 @@ class MainWindow(QMainWindow):
     QApplication.quit()
 
   def load_interfaces(self) -> None:
-    if hasattr(self, "left_panel"):
-      self.left_widget.deleteLater()
+    if len(self.selected_tunnels) > 0: self.selected_tunnels.clear()
+
+    if hasattr(self, "left_panel"): self.left_widget.deleteLater()
 
     self.left_widget = QWidget()
     self.left_layout = QVBoxLayout()
@@ -876,9 +878,9 @@ class MainWindow(QMainWindow):
       remove_action = menu.addAction("Remove selected tunnel(s)...")
       remove_action.setEnabled(False)
 
-      # TODO: (heycatch) create a select_all_action button.
-      select_all_action = menu.addAction("Select all (Not available yet)")
-      select_all_action.setEnabled(False)
+      select_all_action = menu.addAction("Select all")
+      select_all_action.setEnabled(len_interfaces > 0)
+      select_all_action.triggered.connect(self.selected_all_tunnels)
 
     if sender:
       menu.exec(sender.mapToGlobal(position))
@@ -928,6 +930,13 @@ class MainWindow(QMainWindow):
     self.set_icon()
 
     self.show_tunnel(self.selected_tunnel)
+
+  def selected_all_tunnels(self) -> None:
+    for i in range(self.left_layout.count()):
+      widget = self.left_layout.itemAt(i).widget()
+      if isinstance(widget, TunnelButton):
+        widget.set_selected(True)
+        self.selected_tunnels.append(widget.text())
 
   def create_tunnel(self) -> None:
     priv_key, pub_key = self.wireguard.generate_keys()
@@ -1033,47 +1042,110 @@ class MainWindow(QMainWindow):
     self.show_tunnel(self.selected_tunnel)
 
   def remove_tunnel(self) -> None:
-    if not self.selected_tunnel: return
+    if not self.selected_tunnels and not self.selected_tunnel: return
+
+    len_tunnels = len(self.selected_tunnels)
+    if len_tunnels > 0:
+      custom_message = f"Are you sure you want to remove {len_tunnels} tunnels?"
+    else:
+      custom_message = f"Are you sure you want to remove tunnel {self.selected_tunnel}?"
 
     reply = QMessageBox.question(
       self,
       "Confirm",
-      f"Are you sure you want to remove tunnel {self.selected_tunnel}?",
+      custom_message,
       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
     )
 
     if reply == QMessageBox.StandardButton.Yes:
-      paths = [
-        f"/etc/wireguard/{self.selected_tunnel}.conf",
-        f"/usr/local/etc/wireguard/{self.selected_tunnel}.conf"
-      ]
-
-      for path in paths:
-        if os.path.isfile(path):
-          try:
-            if not os.access(path, os.W_OK):
+      if len_tunnels > 0:
+        for tunnel in self.selected_tunnels:
+          check_tunnel = self.wireguard.read_config(tunnel)
+          if check_tunnel.get("interface_listen_port", 0) != 0:
+            try:
+              subprocess.run(["wg-quick", "down", tunnel], check=True)
+            except subprocess.CalledProcessError as e:
               QMessageBox.warning(
                 self,
                 "Error",
-                f"No delete permission for {path}"
+                f"Failed to stop tunnel {tunnel}: {str(e)}"
+              )
+              continue
+
+          for config in ["/etc/wireguard", "/usr/local/etc/wireguard"]:
+            if not os.path.exists(config): continue
+
+            path = os.path.join(config, f"{tunnel}.conf")
+            if os.path.isfile(path):
+              try:
+                if not os.access(path, os.W_OK):
+                  QMessageBox.warning(
+                    self,
+                    "Error",
+                    f"No delete permission for {path}"
+                  )
+                  continue
+
+                os.remove(path)
+                break
+              except Exception as e:
+                QMessageBox.warning(
+                  self,
+                  "Error",
+                  f"Failed to delete configuration file: {str(e)}"
+                )
+                continue
+
+        for tunnel in self.selected_tunnels:
+          for i in range(self.left_layout.count()):
+            widget = self.left_layout.itemAt(i).widget()
+            if isinstance(widget, TunnelButton) and widget.text() == tunnel:
+              widget.deleteLater()
+              break
+      else:
+        paths = [
+          f"/etc/wireguard/{self.selected_tunnel}.conf",
+          f"/usr/local/etc/wireguard/{self.selected_tunnel}.conf"
+        ]
+
+        for path in paths:
+          if os.path.isfile(path):
+            try:
+              check_tunnel = self.wireguard.read_config(self.selected_tunnel)
+              if check_tunnel.get("interface_listen_port", 0) != 0:
+                try:
+                  subprocess.run(["wg-quick", "down", self.selected_tunnel], check=True)
+                except subprocess.CalledProcessError as e:
+                  QMessageBox.warning(
+                    self,
+                    "Error",
+                    f"Failed to stop tunnel {self.selected_tunnel}: {str(e)}"
+                  )
+                  break
+
+              if not os.access(path, os.W_OK):
+                QMessageBox.warning(
+                  self,
+                  "Error",
+                  f"No delete permission for {path}"
+                )
+                break
+
+              os.remove(path)
+              break
+            except Exception as e:
+              QMessageBox.warning(
+                self,
+                "Error",
+                f"Failed to delete configuration file: {str(e)}"
               )
               return
 
-            os.remove(path)
+        for i in range(self.left_layout.count()):
+          widget = self.left_layout.itemAt(i).widget()
+          if isinstance(widget, TunnelButton) and widget.text() == self.selected_tunnel:
+            widget.deleteLater()
             break
-          except Exception as e:
-            QMessageBox.warning(
-              self,
-              "Error",
-              f"Failed to delete configuration file: {str(e)}"
-            )
-            return
-
-      for i in range(self.left_layout.count()):
-        widget = self.left_layout.itemAt(i).widget()
-        if isinstance(widget, TunnelButton) and widget.text() == self.selected_tunnel:
-          widget.deleteLater()
-          break
 
       while self.right_layout.count():
         item = self.right_layout.takeAt(0)
