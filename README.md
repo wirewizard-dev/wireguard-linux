@@ -5,24 +5,41 @@
 </picture>
 
 </br>
+</br>
 
 **wireguard-linux**: lightweight desktop application for managing WireGuard tunnels.
 
-</div>
+<h3>
 
-### What i use
-* Python 3.11
-* Go 1.24.0
+[Release Page](https://github.com/wirewizarddev/wireguard-linux/releases/tag/v1.0.0)
+
+</h3>
+
+</div>
 
 ### Install (Debian/Ubuntu)
 ```bash
-sudo apt install wireguard-tools git
+wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.0/wireguard-linux_1.0.0_amd64.deb
 
-git clone git@github.com:wirewizarddev/wireguard-linux.git
-cd wireguard-linux
-
-make install
+sudo dpkg -i wireguard-linux_1.0.0_amd64.deb
 ```
+
+### Build from source:
+```bash
+make build
+make install
+make clear
+```
+
+### FAQ
+- Why a binary file is ~**60** MB?
+  * Because it's _Python_... Default libs ~**15**MB + PySide6 ~**40**MB + Source code ~**5**-**10**MB.
+- How much _memory_ does the application consume?
+  * The application itself uses **1**MB of RAM at startup.
+- I get error in logs: _returned non-zero exit status 127_?
+  * Most likely the problem is in the configuration file. They are different from the one on **windows**.
+- How do i completely uninstall the application?
+  * make uninstall
 
 ### Development
 ```bash
@@ -34,3 +51,7 @@ pip3 install -r requirements.txt
 
 sudo LOCAL=ON venv/bin/python3.11 wireguard.py
 ```
+
+### What i use
+* Python 3.11
+* Go 1.24.0

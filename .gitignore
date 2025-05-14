@@ -1,5 +1,6 @@
 venv/
 dist/
 build/
+*.deb
 wirewizard.so
 wireguard.spec
