@@ -11,7 +11,7 @@
 
 <h3>
 
-[Release Page](https://github.com/wirewizarddev/wireguard-linux/releases/tag/v1.0.0)
+[Release Page](https://github.com/wirewizarddev/wireguard-linux/releases)
 
 </h3>
 
@@ -19,9 +19,9 @@
 
 ### Install (Debian/Ubuntu)
 ```bash
-wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.0/wireguard-linux_1.0.0_amd64.deb
+wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.1/wireguard-linux_1.0.1_amd64.deb
 
-sudo dpkg -i wireguard-linux_1.0.0_amd64.deb
+sudo dpkg -i wireguard-linux_1.0.1_amd64.deb
 ```
 
 ### Build from source:
