@@ -46,7 +46,7 @@ class Config:
   _local_mode = os.getenv("LOCAL") == "ON"
 
   @classmethod
-  def get_data(cls) -> str:
+  def get_date(cls) -> str:
     return f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
 
   @classmethod
@@ -268,7 +268,9 @@ class TunnelCreationDialog(QDialog):
       QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
-    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
+    # NOTE: (heycatch) interface naming rules are present in man8.
+    # Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_=+.-]{1,15}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
         "Error",
@@ -399,9 +401,9 @@ class TunnelEditDialog(QDialog):
           try:
             cmd = ["wg-quick", "down", self.tunnel_name]
             res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+            self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
           except subprocess.CalledProcessError as e:
-            self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+            self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
 
             QMessageBox.warning(
               self,
@@ -431,7 +433,9 @@ class TunnelEditDialog(QDialog):
       QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
-    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_-]{0,13}[a-zA-Z0-9])?$", name):
+    # NOTE: (heycatch) interface naming rules are present in man8.
+    # Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_=+.-]{1,15}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
         "Error",
@@ -693,6 +697,7 @@ class MainWindow(QMainWindow):
     self.selected_tunnel = None
     self.selected_button = None
     self.selected_tunnels = []
+    self.all_tunnels_selected = False
 
     self.tray_icon = QSystemTrayIcon(self)
     self.tray_icon.setIcon(QIcon(self.default_icon))
@@ -1028,14 +1033,17 @@ class MainWindow(QMainWindow):
       remove_action = menu.addAction("Remove selected tunnel(s)...")
       remove_action.setEnabled(False)
 
-      select_all_action = menu.addAction("Select all")
-      select_all_action.setEnabled(len_interfaces > 0)
-      select_all_action.triggered.connect(self.selected_all_tunnels)
+      if self.all_tunnels_selected:
+        unselect_all_action = menu.addAction("Unselect all")
+        unselect_all_action.setEnabled(len_interfaces > 0)
+        unselect_all_action.triggered.connect(self.unselect_all_tunnels)
+      else:
+        select_all_action = menu.addAction("Select all")
+        select_all_action.setEnabled(len_interfaces > 0)
+        select_all_action.triggered.connect(self.selected_all_tunnels)
 
-    if sender:
-      menu.exec(sender.mapToGlobal(position))
-    else:
-      menu.exec(self.left_panel.mapToGlobal(position))
+    if sender: menu.exec(sender.mapToGlobal(position))
+    else: menu.exec(self.left_panel.mapToGlobal(position))
 
   def toggle_selected_tunnel(self) -> None:
     if not self.selected_tunnel: return
@@ -1053,10 +1061,10 @@ class MainWindow(QMainWindow):
       try:
         cmd = ["wg-quick", "down", active_tunnel]
         res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+        self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
         if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
       except subprocess.CalledProcessError as e:
-        self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+        self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
         if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
         QMessageBox.warning(self, "Error", f"Failed to stop tunnel {active_tunnel}.")
@@ -1065,10 +1073,10 @@ class MainWindow(QMainWindow):
     try:
       cmd = ["wg-quick", "up", self.selected_tunnel]
       res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
       if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
     except subprocess.CalledProcessError as e:
-      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
       if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
       QMessageBox.warning(
@@ -1094,6 +1102,32 @@ class MainWindow(QMainWindow):
       if isinstance(widget, TunnelButton):
         widget.set_selected(True)
         self.selected_tunnels.append(widget.text())
+
+    self.all_tunnels_selected = True
+
+  def unselect_all_tunnels(self) -> None:
+    self.selected_tunnels.clear()
+    self.all_tunnels_selected = False
+
+    for i in range(self.left_layout.count()):
+      widget = self.left_layout.itemAt(i).widget()
+      if isinstance(widget, TunnelButton):
+        widget.set_selected(False)
+
+    while self.right_layout.count():
+      item = self.right_layout.takeAt(0)
+      if item.widget(): item.widget().deleteLater()
+
+    import_btn = QPushButton("Import tunnel(s) from file")
+    import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
+    import_btn.clicked.connect(self.import_tunnels)
+    self.right_layout.addStretch()
+    self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+    self.right_layout.addStretch()
+    self.right_panel.setLayout(self.right_layout)
+
+    self.selected_tunnel = None
+    self.selected_button = None
 
   def create_tunnel(self) -> None:
     priv_key, pub_key = self.wireguard.generate_keys()
@@ -1191,10 +1225,10 @@ class MainWindow(QMainWindow):
       if new_state: cmd = ["wg-quick", "up", self.selected_tunnel]
       else: cmd = ["wg-quick", "down", self.selected_tunnel]
       res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
       if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
     except subprocess.CalledProcessError as e:
-      self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
       if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
       QMessageBox.warning(
@@ -1239,10 +1273,10 @@ class MainWindow(QMainWindow):
             try:
               cmd = ["wg-quick", "down", tunnel]
               res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-              self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+              self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
               if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
             except subprocess.CalledProcessError as e:
-              self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+              self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
               if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
               QMessageBox.warning(self, "Error", f"Failed to stop tunnel {tunnel}.")
@@ -1292,10 +1326,10 @@ class MainWindow(QMainWindow):
                 try:
                   cmd = ["wg-quick", "down", self.selected_tunnel]
                   res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                  self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+                  self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
                   if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
                 except subprocess.CalledProcessError as e:
-                  self.logs += f"{Config.get_data()} {' '.join(cmd)}:\n{str(e)}\n"
+                  self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
                   if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
                   QMessageBox.warning(

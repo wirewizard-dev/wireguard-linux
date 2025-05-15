@@ -55,3 +55,5 @@ sudo LOCAL=ON venv/bin/python3.11 wireguard.py
 ### What i use
 * Python 3.11
 * Go 1.24.0
+---
+All Rights Reserved. "WireGuard" and the "WireGuard" logo are registered trademarks of Jason A. Donenfeld.
