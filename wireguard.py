@@ -524,6 +524,31 @@ class TunnelButton(QPushButton):
         if tunnel_name in main_window.selected_tunnels:
           main_window.selected_tunnels.remove(tunnel_name)
           self.set_selected(False)
+
+          for i in range(main_window.right_layout.count()):
+            widget = main_window.right_layout.itemAt(i).widget()
+            if isinstance(widget, TunnelConfigWidget):
+              while main_window.right_layout.count():
+                item = main_window.right_layout.takeAt(0)
+                if item.widget(): item.widget().deleteLater()
+
+              import_btn = QPushButton("Import tunnel(s) from file")
+              import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
+              import_btn.clicked.connect(main_window.import_tunnels)
+              main_window.right_layout.addStretch()
+              main_window.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+              main_window.right_layout.addStretch()
+              main_window.right_panel.setLayout(main_window.right_layout)
+
+              self.selected_tunnel = None
+              self.selected_button = None
+
+              if main_window.edit_button:
+                main_window.bottom_layout.removeWidget(main_window.edit_button)
+                main_window.edit_button.deleteLater()
+                main_window.edit_button = None
+
+              break
         else:
           main_window.selected_tunnels.append(tunnel_name)
           self.set_selected(True)
@@ -992,7 +1017,9 @@ class MainWindow(QMainWindow):
       for i in range(self.left_layout.count()):
         widget = self. left_layout.itemAt(i).widget()
         if isinstance(widget, TunnelButton):
-          widget.set_selected(widget.text() == tunnel_name)
+          widget.set_selected(
+            widget.text() == tunnel_name or widget.text() in self.selected_tunnels
+          )
 
       toggle_action = menu.addAction("Toggle")
       toggle_action.setEnabled(
@@ -1123,6 +1150,14 @@ class MainWindow(QMainWindow):
       item = self.right_layout.takeAt(0)
       if item.widget(): item.widget().deleteLater()
 
+    self.selected_tunnel = None
+    self.selected_button = None
+
+    if self.edit_button:
+      self.bottom_layout.removeWidget(self.edit_button)
+      self.edit_button.deleteLater()
+      self.edit_button = None
+
     import_btn = QPushButton("Import tunnel(s) from file")
     import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
     import_btn.clicked.connect(self.import_tunnels)
@@ -1130,9 +1165,6 @@ class MainWindow(QMainWindow):
     self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
     self.right_layout.addStretch()
     self.right_panel.setLayout(self.right_layout)
-
-    self.selected_tunnel = None
-    self.selected_button = None
 
   def create_tunnel(self) -> None:
     dialog = TunnelCreationDialog(self.wireguard, self)
@@ -1147,11 +1179,10 @@ class MainWindow(QMainWindow):
       widget = self.left_layout.itemAt(i).widget()
 
       if isinstance(widget, TunnelButton):
-        if widget.text() == name:
-          widget.set_selected(True)
-          self.selected_button = widget
-        else:
-          widget.set_selected(False)
+        widget.set_selected(
+          widget.text() == name or widget.text() in self.selected_tunnels
+        )
+        if widget.text() == name: self.selected_button = widget
 
     while self.right_layout.count():
       item = self.right_layout.takeAt(0)
@@ -1373,6 +1404,11 @@ class MainWindow(QMainWindow):
 
       self.selected_tunnel = None
       self.selected_button = None
+
+      if self.edit_button:
+        self.bottom_layout.removeWidget(self.edit_button)
+        self.edit_button.deleteLater()
+        self.edit_button = None
 
       import_btn = QPushButton("Import tunnel(s) from file")
       import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
