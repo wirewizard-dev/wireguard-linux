@@ -19,9 +19,9 @@
 
 ### Install (Debian/Ubuntu)
 ```bash
-wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.2/wireguard-linux_1.0.2_amd64.deb
+wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.3/wireguard-linux_1.0.3_amd64.deb
 
-sudo dpkg -i wireguard-linux_1.0.2_amd64.deb
+sudo dpkg -i wireguard-linux_1.0.3_amd64.deb
 ```
 
 ### Build from source:

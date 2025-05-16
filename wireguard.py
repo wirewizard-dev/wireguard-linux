@@ -1025,7 +1025,7 @@ class MainWindow(QMainWindow):
       toggle_action.setEnabled(
         len_interfaces > 1 and self.selected_tunnel is not None
       )
-      toggle_action.triggered.connect(self.toggle_selected_tunnel)
+      toggle_action.triggered.connect(self.toggle_tunnel)
 
       menu.addSeparator()
 
@@ -1079,57 +1079,6 @@ class MainWindow(QMainWindow):
 
     if sender: menu.exec(sender.mapToGlobal(position))
     else: menu.exec(self.left_panel.mapToGlobal(position))
-
-  def toggle_selected_tunnel(self) -> None:
-    if not self.selected_tunnel: return
-
-    active_tunnel = None
-    for interface in self.wireguard.read_interfaces_name():
-      config = self.wireguard.read_config(interface)
-      if config.get("interface_listen_port", 0) != 0:
-        active_tunnel = interface
-        break
-
-    if active_tunnel == self.selected_tunnel: return
-
-    if active_tunnel:
-      try:
-        cmd = ["wg-quick", "down", active_tunnel]
-        res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-        if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-      except subprocess.CalledProcessError as e:
-        self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-        if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
-        QMessageBox.warning(self, "Error", f"Failed to stop tunnel {active_tunnel}.")
-        return
-
-    try:
-      cmd = ["wg-quick", "up", self.selected_tunnel]
-      res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-    except subprocess.CalledProcessError as e:
-      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
-      QMessageBox.warning(
-        self,
-        "Error", "Failed to start tunnel, most likely an error in the configuration file."
-      )
-      return
-
-    for i in range(self.left_layout.count()):
-      widget = self.left_layout.itemAt(i).widget()
-      if isinstance(widget, TunnelButton):
-        config = self.wireguard.read_config(widget.text())
-        widget.is_active = config.get("interface_listen_port", 0) != 0
-        widget.update()
-
-    self.set_icon()
-
-    self.show_tunnel(self.selected_tunnel)
 
   def selected_all_tunnels(self) -> None:
     for i in range(self.left_layout.count()):
@@ -1254,6 +1203,28 @@ class MainWindow(QMainWindow):
     if not self.selected_tunnel: return
 
     new_state = not is_active
+
+    if new_state:
+      active_tunnel = None
+      for interface in self.wireguard.read_interfaces_name():
+        config = self.wireguard.read_config(interface)
+        if config.get("interface_listen_port", 0) != 0:
+          active_tunnel = interface
+          break
+
+      if active_tunnel and active_tunnel != self.selected_tunnel:
+        try:
+          cmd = ["wg-quick", "down", active_tunnel]
+          res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+          self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+          if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+        except subprocess.CalledProcessError as e:
+          self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
+          if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
+          QMessageBox.warning(self, "Error", f"Failed to stop tunnel {active_tunnel}")
+          return
+
     try:
       if new_state: cmd = ["wg-quick", "up", self.selected_tunnel]
       else: cmd = ["wg-quick", "down", self.selected_tunnel]
@@ -1264,19 +1235,20 @@ class MainWindow(QMainWindow):
       self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
       if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
 
+      # NOTE: (heycatch) in this place we do not need return, because we need
+      # to update the visual state of buttons and indicators.
       QMessageBox.warning(
         self,
         "Error",
         "Failed to toggle tunnel, most likely an error in the configuration file."
       )
-      return
 
     for i in range(self.left_layout.count()):
       widget = self.left_layout.itemAt(i).widget()
-      if isinstance(widget, TunnelButton) and widget.text() == self.selected_tunnel:
-        widget.is_active = new_state
+      if isinstance(widget, TunnelButton):
+        config = self.wireguard.read_config(widget.text())
+        widget.is_active = config.get("interface_listen_port", 0) != 0
         widget.update()
-        break
 
     self.set_icon()
 
