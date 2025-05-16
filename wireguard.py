@@ -38,7 +38,8 @@ from PySide6.QtGui import (
   QPainter,
   QColor,
   QPaintEvent,
-  QCloseEvent
+  QCloseEvent,
+  QMouseEvent
 )
 
 
@@ -515,6 +516,20 @@ class TunnelButton(QPushButton):
 
     self.update_style()
 
+  def mousePressEvent(self, event: QMouseEvent) -> None:
+    if event.button() == Qt.LeftButton and event.modifiers() & Qt.ControlModifier:
+      main_window = self.window()
+      if isinstance(main_window, MainWindow):
+        tunnel_name = self.text()
+        if tunnel_name in main_window.selected_tunnels:
+          main_window.selected_tunnels.remove(tunnel_name)
+          self.set_selected(False)
+        else:
+          main_window.selected_tunnels.append(tunnel_name)
+          self.set_selected(True)
+    else:
+      super().mousePressEvent(event)
+
 class TunnelConfigWidget(QWidget):
   def __init__(
     self,
@@ -697,18 +712,15 @@ class MainWindow(QMainWindow):
     self.selected_tunnel = None
     self.selected_button = None
     self.selected_tunnels = []
-    self.all_tunnels_selected = False
 
     self.tray_icon = QSystemTrayIcon(self)
     self.tray_icon.setIcon(QIcon(self.default_icon))
-
     tray_menu = QMenu()
     open_acton = tray_menu.addAction("Show")
     open_acton.triggered.connect(self.showNormal)
     exit_action = tray_menu.addAction("Exit")
     exit_action.triggered.connect(self.quit_application)
     self.tray_icon.setContextMenu(tray_menu)
-
     self.tray_icon.activated.connect(self.tray_icon_activated)
     self.tray_icon.show()
 
@@ -932,8 +944,6 @@ class MainWindow(QMainWindow):
     QApplication.quit()
 
   def load_interfaces(self) -> None:
-    if len(self.selected_tunnels) > 0: self.selected_tunnels.clear()
-
     if hasattr(self, "left_panel"): self.left_widget.deleteLater()
 
     self.left_widget = QWidget()
@@ -1033,13 +1043,11 @@ class MainWindow(QMainWindow):
       remove_action = menu.addAction("Remove selected tunnel(s)...")
       remove_action.setEnabled(False)
 
-      if self.all_tunnels_selected:
+      if len(self.selected_tunnels) > 0:
         unselect_all_action = menu.addAction("Unselect all")
-        unselect_all_action.setEnabled(len_interfaces > 0)
         unselect_all_action.triggered.connect(self.unselect_all_tunnels)
       else:
         select_all_action = menu.addAction("Select all")
-        select_all_action.setEnabled(len_interfaces > 0)
         select_all_action.triggered.connect(self.selected_all_tunnels)
 
     if sender: menu.exec(sender.mapToGlobal(position))
@@ -1103,11 +1111,8 @@ class MainWindow(QMainWindow):
         widget.set_selected(True)
         self.selected_tunnels.append(widget.text())
 
-    self.all_tunnels_selected = True
-
   def unselect_all_tunnels(self) -> None:
     self.selected_tunnels.clear()
-    self.all_tunnels_selected = False
 
     for i in range(self.left_layout.count()):
       widget = self.left_layout.itemAt(i).widget()
@@ -1144,7 +1149,6 @@ class MainWindow(QMainWindow):
       if isinstance(widget, TunnelButton):
         if widget.text() == name:
           widget.set_selected(True)
-
           self.selected_button = widget
         else:
           widget.set_selected(False)
@@ -1252,7 +1256,7 @@ class MainWindow(QMainWindow):
 
     len_tunnels = len(self.selected_tunnels)
     if len_tunnels > 0:
-      custom_message = f"Are you sure you want to remove {len_tunnels} tunnels?"
+      custom_message = f"Are you sure you want to remove {self.selected_tunnels} tunnels?"
     else:
       custom_message = f"Are you sure you want to remove tunnel {self.selected_tunnel}?"
 
@@ -1310,6 +1314,8 @@ class MainWindow(QMainWindow):
             if isinstance(widget, TunnelButton) and widget.text() == tunnel:
               widget.deleteLater()
               break
+
+        self.selected_tunnels.clear()
       else:
         paths = [
           f"/etc/wireguard/{self.selected_tunnel}.conf",
@@ -1434,12 +1440,12 @@ class MainWindow(QMainWindow):
           )
           continue
 
-    if count > 0:
-      QMessageBox.information(
-        self,
-        "Success",
-        f"Successfully imported {count} tunnel(s)."
-      )
+      if count > 0:
+        QMessageBox.information(
+          self,
+          "Success",
+          f"Successfully imported {count} tunnel(s)."
+        )
 
       self.load_interfaces()
     else:
