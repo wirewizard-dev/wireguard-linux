@@ -26,9 +26,17 @@ sudo dpkg -i wireguard-linux_1.0.2_amd64.deb
 
 ### Build from source:
 ```bash
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+
 make build
+
 make install
+
 make clear
+
+deactivate
 ```
 
 ### FAQ
