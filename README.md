@@ -1,7 +1,7 @@
 <div align="center">
 
 <picture>
-  <img alt="logo" src="/resources/images/application.png" width="70%" height="70%">
+  <img alt="logo" src="/resources/images/application.png">
 </picture>
 
 </br>
