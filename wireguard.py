@@ -195,13 +195,12 @@ class Wireguard:
       self.wg.freeStats(cfg_ptr)
 
 class TunnelCreationDialog(QDialog):
-  def __init__(self, priv_key: str, pub_key: str, parent=None):
+  def __init__(self, wireguard: Wireguard, parent=None):
     super().__init__(parent)
     self.setWindowTitle("Create new tunnel")
     self.setFixedSize(500, 400)
 
-    self.priv_key = priv_key
-    self.pub_key = pub_key
+    self.wireguard = wireguard
 
     self.name_input = None
     self.config_dir = None
@@ -209,19 +208,21 @@ class TunnelCreationDialog(QDialog):
     self.init_ui()
 
   def init_ui(self) -> None:
+    priv_key, pub_key = self.wireguard.generate_keys()
+
     layout = QVBoxLayout()
 
     form_layout = QFormLayout()
     self.name_input = QLineEdit()
     self.public_key = QLineEdit()
-    self.public_key.setText(self.pub_key)
+    self.public_key.setText(pub_key)
     form_layout.addRow("Name:", self.name_input)
     form_layout.addRow("Public Key:", self.public_key)
 
     self.text_edit = QTextEdit()
     self.text_edit.setFontFamily("Monospace")
     self.text_edit.setFontPointSize(10)
-    self.text_edit.setPlainText("[Interface]" + "\n" + f"PrivateKey = {self.priv_key}")
+    self.text_edit.setPlainText("[Interface]" + "\n" + f"PrivateKey = {priv_key}")
 
     button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
     button_box.setStyleSheet(
@@ -312,11 +313,10 @@ class TunnelEditDialog(QDialog):
     self.setWindowTitle("Edit tunnel")
     self.setFixedSize(500, 400)
 
+    self.tunnel_name = tunnel_name
     self.wireguard = wireguard
-
     self.logs = logs
 
-    self.tunnel_name = tunnel_name
     self.config_file = None
     self.config_dir = None
     self.name_input = None
@@ -476,8 +476,9 @@ class TunnelEditDialog(QDialog):
 class TunnelButton(QPushButton):
   def __init__(self, name: str, is_active: bool = False, parent=None):
     super().__init__(name, parent)
-    self.is_selected = False
     self.is_active = is_active
+
+    self.is_selected = False
 
     self.update_style()
 
@@ -528,9 +529,8 @@ class TunnelConfigWidget(QWidget):
     self.layout = QVBoxLayout()
     self.layout.setContentsMargins(0, 0, 0, 0)
 
-    self.wireguard = wireguard
-
     self.name = name
+    self.wireguard = wireguard
     self.is_active = is_active
 
     self.field_widget = {}
@@ -1130,9 +1130,7 @@ class MainWindow(QMainWindow):
     self.selected_button = None
 
   def create_tunnel(self) -> None:
-    priv_key, pub_key = self.wireguard.generate_keys()
-
-    dialog = TunnelCreationDialog(priv_key, pub_key, self)
+    dialog = TunnelCreationDialog(self.wireguard, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
       self.load_interfaces()
 
