@@ -47,10 +47,6 @@ class Config:
   _local_mode = os.getenv("LOCAL") == "ON"
 
   @classmethod
-  def get_date(cls) -> str:
-    return f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
-
-  @classmethod
   def get_icons(cls) -> Tuple[str, str]:
     if cls._local_mode:
       return (
@@ -67,6 +63,14 @@ class Config:
   def get_lib(cls) -> Path:
     if cls._local_mode: return Path(__file__).parent / "wirewizard.so"
     else: return Path("/opt/wirewizard/lib/wirewizard.so")
+
+  @classmethod
+  def get_folders(cls) -> List[str]:
+    return ["/etc/wireguard", "/usr/local/etc/wireguard"]
+
+  @classmethod
+  def get_paths(cls, tunnel_name: str) -> List[str]:
+    return [f"{folder}/{tunnel_name}.conf" for folder in cls.get_folders()]
 
 class Wireguard:
   def __init__(self):
@@ -168,15 +172,15 @@ class Wireguard:
 
     try:
       return {
-        "interface_priv_key": cfg.InterfacePrivKey.decode("utf-8") if cfg.InterfacePrivKey else "",
-        "interface_pub_key": cfg.InterfacePubKey.decode("utf-8") if cfg.InterfacePubKey else "",
+        "interface_priv_key": self._str_decode(cfg.InterfacePrivKey),
+        "interface_pub_key": self._str_decode(cfg.InterfacePubKey),
         "interface_listen_port": cfg.InterfaceListenPort,
-        "interface_address": cfg.InterfaceAddress.decode("utf-8") if cfg.InterfaceAddress else "",
-        "interface_dns": cfg.InterfaceDNS.decode("utf-8") if cfg.InterfaceDNS else "",
-        "peer_pub_key": cfg.PeerPubKey.decode("utf-8") if cfg.PeerPubKey else "",
-        "peer_endpoint_address": cfg.PeerEndpointAddress.decode("utf-8") if cfg.PeerEndpointAddress else "",
-        "peer_allowed_ips": cfg.PeerAllowedIPs.decode("utf-8") if cfg.PeerAllowedIPs else "",
-        "peer_keep_alive": cfg.PeerPersistentKeepalive.decode("utf-8") if cfg.PeerPersistentKeepalive else ""
+        "interface_address": self._str_decode(cfg.InterfaceAddress),
+        "interface_dns": self._str_decode(cfg.InterfaceDNS),
+        "peer_pub_key": self._str_decode(cfg.PeerPubKey),
+        "peer_endpoint_address": self._str_decode(cfg.PeerEndpointAddress),
+        "peer_allowed_ips": self._str_decode(cfg.PeerAllowedIPs),
+        "peer_keep_alive": self._str_decode(cfg.PeerPersistentKeepalive)
       }
     finally:
       self.wg.freeConfig(cfg_ptr)
@@ -189,11 +193,14 @@ class Wireguard:
 
     try:
       return {
-        "last_handshake": cfg.LastHandshakeTime.decode("utf-8") if cfg.LastHandshakeTime else "",
-        "transfer": cfg.Transfer.decode("utf-8") if cfg.Transfer else ""
+        "last_handshake": self._str_decode(cfg.LastHandshakeTime),
+        "transfer": self._str_decode(cfg.Transfer)
       }
     finally:
       self.wg.freeStats(cfg_ptr)
+
+  def _str_decode(self, c_str: ctypes.c_char_p) -> str:
+    return c_str.decode("utf-8") if c_str else ""
 
 class TunnelCreationDialog(QDialog):
   def __init__(self, wireguard: Wireguard, parent=None):
@@ -209,16 +216,16 @@ class TunnelCreationDialog(QDialog):
     self.init_ui()
 
   def init_ui(self) -> None:
+    layout = QVBoxLayout()
+    form_layout = QFormLayout()
+
     priv_key, pub_key = self.wireguard.generate_keys()
 
-    layout = QVBoxLayout()
-
-    form_layout = QFormLayout()
     self.name_input = QLineEdit()
-    self.public_key = QLineEdit()
-    self.public_key.setText(pub_key)
+    public_key = QLineEdit()
+    public_key.setText(pub_key)
     form_layout.addRow("Name:", self.name_input)
-    form_layout.addRow("Public Key:", self.public_key)
+    form_layout.addRow("Public Key:", public_key)
 
     self.text_edit = QTextEdit()
     self.text_edit.setFontFamily("Monospace")
@@ -280,8 +287,7 @@ class TunnelCreationDialog(QDialog):
       )
       return False
 
-    folders = ["/etc/wireguard", "/usr/local/etc/wireguard"]
-    for folder in folders:
+    for folder in Config.get_folders():
       if os.path.isdir(folder):
         self.config_dir = folder
         break
@@ -309,14 +315,20 @@ class TunnelCreationDialog(QDialog):
     return True
 
 class TunnelEditDialog(QDialog):
-  def __init__(self, tunnel_name: str, wireguard: Wireguard, logs: str, parent=None):
+  def __init__(
+    self,
+    tunnel_name:str,
+    wireguard: Wireguard,
+    append_log: callable,
+    parent=None
+  ):
     super().__init__(parent)
     self.setWindowTitle("Edit tunnel")
     self.setFixedSize(500, 400)
 
     self.tunnel_name = tunnel_name
     self.wireguard = wireguard
-    self.logs = logs
+    self.append_log = append_log
 
     self.config_file = None
     self.config_dir = None
@@ -326,7 +338,6 @@ class TunnelEditDialog(QDialog):
 
   def init_ui(self) -> None:
     layout = QVBoxLayout()
-
     form_layout = QFormLayout()
 
     self.name_input = QLineEdit()
@@ -361,12 +372,7 @@ class TunnelEditDialog(QDialog):
     self.load_config()
 
   def load_config(self) -> None:
-    paths = [
-      f"/etc/wireguard/{self.tunnel_name}.conf",
-      f"/usr/local/etc/wireguard/{self.tunnel_name}.conf"
-    ]
-
-    for path in paths:
+    for path in Config.get_paths(self.tunnel_name):
       if os.path.isfile(path):
         self.config_file = path
         break
@@ -401,11 +407,10 @@ class TunnelEditDialog(QDialog):
         if config.get("interface_listen_port", 0) != 0:
           try:
             cmd = ["wg-quick", "down", self.tunnel_name]
-            res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
+            res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+            self.append_log(cmd, res.stdout, res.stderr)
           except subprocess.CalledProcessError as e:
-            self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-
+            self.append_log(cmd, e.stdout, e.stderr)
             QMessageBox.warning(
               self,
               "Error",
@@ -444,8 +449,7 @@ class TunnelEditDialog(QDialog):
       )
       return False
 
-    folders = ["/etc/wireguard", "/usr/local/etc/wireguard"]
-    for folder in folders:
+    for folder in Config.get_folders():
       if os.path.isdir(folder):
         self.config_dir = folder
         break
@@ -524,31 +528,7 @@ class TunnelButton(QPushButton):
         if tunnel_name in main_window.selected_tunnels:
           main_window.selected_tunnels.remove(tunnel_name)
           self.set_selected(False)
-
-          for i in range(main_window.right_layout.count()):
-            widget = main_window.right_layout.itemAt(i).widget()
-            if isinstance(widget, TunnelConfigWidget):
-              while main_window.right_layout.count():
-                item = main_window.right_layout.takeAt(0)
-                if item.widget(): item.widget().deleteLater()
-
-              import_btn = QPushButton("Import tunnel(s) from file")
-              import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
-              import_btn.clicked.connect(main_window.import_tunnels)
-              main_window.right_layout.addStretch()
-              main_window.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-              main_window.right_layout.addStretch()
-              main_window.right_panel.setLayout(main_window.right_layout)
-
-              self.selected_tunnel = None
-              self.selected_button = None
-
-              if main_window.edit_button:
-                main_window.bottom_layout.removeWidget(main_window.edit_button)
-                main_window.edit_button.deleteLater()
-                main_window.edit_button = None
-
-              break
+          main_window.clear_right_panel()
         else:
           main_window.selected_tunnels.append(tunnel_name)
           self.set_selected(True)
@@ -673,7 +653,6 @@ class TunnelConfigWidget(QWidget):
     peer_layout = QVBoxLayout()
     peer_layout.setContentsMargins(10, 10, 10, 10)
     peer_layout.setSpacing(5)
-
     peer_fields = [
       ("Public Key:", config.get("peer_pub_key", "")),
       ("Allowed IPs:", config.get("peer_allowed_ips", "")),
@@ -684,19 +663,23 @@ class TunnelConfigWidget(QWidget):
     ]
     for label_text, value in peer_fields:
       field_layout = QHBoxLayout()
+
       label = QLabel(label_text)
       label.setFixedWidth(80)
       label.setAlignment(Qt.AlignmentFlag.AlignRight)
+
       if value:
         value_edit = QLineEdit(value)
         value_edit.setStyleSheet("QLineEdit { border: none; }")
         value_edit.setReadOnly(True)
+
         field_layout.addWidget(label)
         field_layout.addWidget(value_edit)
+
         if label_text in ("Last_HS:", "Transfer:"):
           self.field_widget[label_text] = value_edit
-        peer_layout.addLayout(field_layout)
 
+        peer_layout.addLayout(field_layout)
     peer_group.setLayout(peer_layout)
 
     self.layout.addWidget(interface_group)
@@ -1000,6 +983,36 @@ class MainWindow(QMainWindow):
 
     self.left_layout.addStretch()
 
+  # NOTE: (heycatch) if logs exceed the 6MB limit,
+  # half of the old logs are cleaned up.
+  def append_log(self, cmd: List[str], stdout: str, stderr: str) -> None:
+    date = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
+    self.logs += f"{date} {' '.join(cmd)}:\n{stdout}{stderr}\n"
+
+    if len(self.logs) > 6000000: self.logs = self.logs[-6000000 // 2:]
+    if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+
+  def clear_right_panel(self) -> None:
+    while self.right_layout.count():
+      item = self.right_layout.takeAt(0)
+      if item.widget(): item.widget().deleteLater()
+
+    self.selected_tunnel = None
+    self.selected_button = None
+
+    if self.edit_button:
+      self.bottom_layout.removeWidget(self.edit_button)
+      self.edit_button.deleteLater()
+      self.edit_button = None
+
+    import_btn = QPushButton("Import tunnel(s) from file")
+    import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
+    import_btn.clicked.connect(self.import_tunnels)
+    self.right_layout.addStretch()
+    self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+    self.right_layout.addStretch()
+    self.right_panel.setLayout(self.right_layout)
+
   def show_context_menu(
     self,
     position: QPoint,
@@ -1015,7 +1028,7 @@ class MainWindow(QMainWindow):
     if from_button and tunnel_name:
       self.selected_tunnel = tunnel_name
       for i in range(self.left_layout.count()):
-        widget = self. left_layout.itemAt(i).widget()
+        widget = self.left_layout.itemAt(i).widget()
         if isinstance(widget, TunnelButton):
           widget.set_selected(
             widget.text() == tunnel_name or widget.text() in self.selected_tunnels
@@ -1095,25 +1108,7 @@ class MainWindow(QMainWindow):
       if isinstance(widget, TunnelButton):
         widget.set_selected(False)
 
-    while self.right_layout.count():
-      item = self.right_layout.takeAt(0)
-      if item.widget(): item.widget().deleteLater()
-
-    self.selected_tunnel = None
-    self.selected_button = None
-
-    if self.edit_button:
-      self.bottom_layout.removeWidget(self.edit_button)
-      self.edit_button.deleteLater()
-      self.edit_button = None
-
-    import_btn = QPushButton("Import tunnel(s) from file")
-    import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
-    import_btn.clicked.connect(self.import_tunnels)
-    self.right_layout.addStretch()
-    self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-    self.right_layout.addStretch()
-    self.right_panel.setLayout(self.right_layout)
+    self.clear_right_panel()
 
   def create_tunnel(self) -> None:
     dialog = TunnelCreationDialog(self.wireguard, self)
@@ -1126,7 +1121,6 @@ class MainWindow(QMainWindow):
 
     for i in range(self.left_layout.count()):
       widget = self.left_layout.itemAt(i).widget()
-
       if isinstance(widget, TunnelButton):
         widget.set_selected(
           widget.text() == name or widget.text() in self.selected_tunnels
@@ -1187,11 +1181,8 @@ class MainWindow(QMainWindow):
     self.bottom_layout.addWidget(self.edit_button)
 
   def edit_tunnel(self) -> None:
-    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self.logs, self)
+    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self.append_log, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
-      self.logs = dialog.logs
-      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
       self.load_interfaces()
 
       if dialog.name_input.text().strip() in self.wireguard.read_interfaces_name():
@@ -1215,26 +1206,20 @@ class MainWindow(QMainWindow):
       if active_tunnel and active_tunnel != self.selected_tunnel:
         try:
           cmd = ["wg-quick", "down", active_tunnel]
-          res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-          self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-          if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+          res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+          self.append_log(cmd, res.stdout, res.stderr)
         except subprocess.CalledProcessError as e:
-          self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-          if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
+          self.append_log(cmd, e.stdout, e.stderr)
           QMessageBox.warning(self, "Error", f"Failed to stop tunnel {active_tunnel}")
           return
 
     try:
       if new_state: cmd = ["wg-quick", "up", self.selected_tunnel]
       else: cmd = ["wg-quick", "down", self.selected_tunnel]
-      res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+      res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+      self.append_log(cmd, res.stdout, res.stderr)
     except subprocess.CalledProcessError as e:
-      self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-      if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
+      self.append_log(cmd, e.stdout, e.stderr)
       # NOTE: (heycatch) in this place we do not need return, because we need
       # to update the visual state of buttons and indicators.
       QMessageBox.warning(
@@ -1277,17 +1262,14 @@ class MainWindow(QMainWindow):
           if check_tunnel.get("interface_listen_port", 0) != 0:
             try:
               cmd = ["wg-quick", "down", tunnel]
-              res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-              self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-              if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+              res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+              self.append_log(cmd, res.stdout, res.stderr)
             except subprocess.CalledProcessError as e:
-              self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-              if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
+              self.append_log(cmd, e.stdout, e.stderr)
               QMessageBox.warning(self, "Error", f"Failed to stop tunnel {tunnel}.")
               continue
 
-          for config in ["/etc/wireguard", "/usr/local/etc/wireguard"]:
+          for config in Config.get_folders():
             if not os.path.exists(config): continue
 
             path = os.path.join(config, f"{tunnel}.conf")
@@ -1320,25 +1302,17 @@ class MainWindow(QMainWindow):
 
         self.selected_tunnels.clear()
       else:
-        paths = [
-          f"/etc/wireguard/{self.selected_tunnel}.conf",
-          f"/usr/local/etc/wireguard/{self.selected_tunnel}.conf"
-        ]
-
-        for path in paths:
+        for path in Config.get_paths(self.selected_tunnel):
           if os.path.isfile(path):
             try:
               check_tunnel = self.wireguard.read_config(self.selected_tunnel)
               if check_tunnel.get("interface_listen_port", 0) != 0:
                 try:
                   cmd = ["wg-quick", "down", self.selected_tunnel]
-                  res = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                  self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{res.stdout}{res.stderr}\n"
-                  if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
+                  res = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=20)
+                  self.append_log(cmd, res.stdout, res.stderr)
                 except subprocess.CalledProcessError as e:
-                  self.logs += f"{Config.get_date()} {' '.join(cmd)}:\n{str(e)}\n"
-                  if hasattr(self, "logs_text"): self.logs_text.setPlainText(self.logs)
-
+                  self.append_log(cmd, e.stdout, e.stderr)
                   QMessageBox.warning(
                     self,
                     "Error",
@@ -1370,25 +1344,7 @@ class MainWindow(QMainWindow):
             widget.deleteLater()
             break
 
-      while self.right_layout.count():
-        item = self.right_layout.takeAt(0)
-        if item.widget(): item.widget().deleteLater()
-
-      self.selected_tunnel = None
-      self.selected_button = None
-
-      if self.edit_button:
-        self.bottom_layout.removeWidget(self.edit_button)
-        self.edit_button.deleteLater()
-        self.edit_button = None
-
-      import_btn = QPushButton("Import tunnel(s) from file")
-      import_btn.setStyleSheet("font-weight: bold; font-size: 15px;")
-      import_btn.clicked.connect(self.import_tunnels)
-      self.right_layout.addStretch()
-      self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-      self.right_layout.addStretch()
-      self.right_panel.setLayout(self.right_layout)
+      self.clear_right_panel()
 
       self.load_interfaces()
 
@@ -1401,8 +1357,7 @@ class MainWindow(QMainWindow):
       config_dir = None
       count = 0
 
-      folders = ["/etc/wireguard", "/usr/local/etc/wireguard"]
-      for folder in folders:
+      for folder in Config.get_folders():
         if os.path.isdir(folder):
           config_dir = folder
           break
@@ -1462,8 +1417,7 @@ class MainWindow(QMainWindow):
   def export_tunnels(self) -> None:
     config_dir = None
 
-    folders = ["/etc/wireguard", "/usr/local/etc/wireguard"]
-    for folder in folders:
+    for folder in Config.get_folders():
       if os.path.isdir(folder):
         config_dir = folder
         break

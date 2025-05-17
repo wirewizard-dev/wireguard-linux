@@ -6,6 +6,9 @@ gui:
 sdk:
 	go build -buildmode=c-shared -o wirewizard.so wireguard.go && rm wirewizard.h
 
+clear:
+	rm wireguard.spec && rm -rf build/ dist/ wirewizard.so
+
 install:
 	@sudo mkdir -p /opt/wirewizard/bin /opt/wirewizard/lib /opt/wirewizard/resources
 	@sudo cp -r resources/icons/ /opt/wirewizard/resources/
@@ -19,9 +22,6 @@ uninstall:
 	@sudo rm -rf /opt/wirewizard
 	@sudo rm /usr/share/applications/wireguard-linux.desktop
 	@sudo rm /usr/share/polkit-1/actions/org.freedesktop.wirewizard.policy
-
-clear:
-	rm wireguard.spec && rm -rf build/ dist/
 
 dev:
 	sudo LOCAL=ON venv/bin/python3.11 wireguard.py
