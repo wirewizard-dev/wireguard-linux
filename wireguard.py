@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple, List
 
-from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtCore import Qt, QPoint, QTimer, QRegularExpression
 from PySide6.QtWidgets import (
   QApplication,
   QMainWindow,
@@ -39,7 +39,10 @@ from PySide6.QtGui import (
   QColor,
   QPaintEvent,
   QCloseEvent,
-  QMouseEvent
+  QMouseEvent,
+  QTextCharFormat,
+  QSyntaxHighlighter,
+  QFont
 )
 
 
@@ -202,6 +205,78 @@ class Wireguard:
   def _str_decode(self, c_str: ctypes.c_char_p) -> str:
     return c_str.decode("utf-8") if c_str else ""
 
+class WIreGuardHighlighter(QSyntaxHighlighter):
+  def __init__(self, parent=None):
+    super().__init__(parent)
+
+    self.section_format = QTextCharFormat()
+    self.section_format.setForeground(QColor("#2e6a77"))
+
+    self.key_format = QTextCharFormat()
+    self.key_format.setForeground(QColor("#9945a1"))
+    self.key_format.setFontWeight(QFont.Bold)
+
+    self.value_format = QTextCharFormat()
+    self.value_format.setForeground(QColor("#2324df"))
+
+    self.special_value_format = QTextCharFormat()
+    self.special_value_format.setForeground(QColor("#64492d"))
+
+    self.section_pattern = QRegularExpression(r"^\s*\[(Interface|Peer)\]\s*$")
+    self.key_value_pattern = QRegularExpression(r"^\s*([A-Za-z]+)\s*=\s*(.+)$")
+    octet = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+    self.ip_pattern = QRegularExpression(
+      r"(" + octet + r"\." + octet + r"\." + octet + r"\." + octet + r")([:/]\d+)(?:,|\s|$)?"
+    )
+
+  def highlightBlock(self, text: str) -> None:
+    section_match = self.section_pattern.match(text)
+    if section_match.hasMatch():
+      self.setFormat(
+        section_match.capturedStart(0),
+        section_match.capturedLength(0),
+        self.section_format
+      )
+      return
+
+    key_value_match = self.key_value_pattern.match(text)
+    if key_value_match.hasMatch():
+      self.setFormat(
+        key_value_match.capturedStart(1),
+        key_value_match.capturedLength(1),
+        self.key_format
+      )
+
+      if key_value_match.captured(1) in ["PrivateKey", "PublicKey"]:
+        self.setFormat(
+          key_value_match.capturedStart(2),
+          key_value_match.capturedLength(2),
+          self.special_value_format
+        )
+      else:
+        self.setFormat(
+          key_value_match.capturedStart(2),
+          key_value_match.capturedLength(2),
+          self.value_format
+        )
+
+        ip_match_iterator = self.ip_pattern.globalMatch(
+          key_value_match.captured(2).strip()
+        )
+        while ip_match_iterator.hasNext():
+          ip_match = ip_match_iterator.next()
+
+          self.setFormat(
+            key_value_match.capturedStart(2) + ip_match.capturedStart(1),
+            ip_match.capturedStart(1),
+            self.value_format
+          )
+          self.setFormat(
+            key_value_match.capturedStart(2) + ip_match.capturedStart(2),
+            ip_match.capturedLength(2),
+            self.special_value_format
+          )
+
 class TunnelCreationDialog(QDialog):
   def __init__(self, wireguard: Wireguard, parent=None):
     super().__init__(parent)
@@ -212,6 +287,7 @@ class TunnelCreationDialog(QDialog):
 
     self.name_input = None
     self.config_dir = None
+    self.highlighter = None
 
     self.init_ui()
 
@@ -231,6 +307,8 @@ class TunnelCreationDialog(QDialog):
     self.text_edit.setFontFamily("Monospace")
     self.text_edit.setFontPointSize(10)
     self.text_edit.setPlainText("[Interface]" + "\n" + f"PrivateKey = {priv_key}")
+
+    self.highlighter = WIreGuardHighlighter(self.text_edit)
 
     button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
     button_box.setStyleSheet(
@@ -317,7 +395,7 @@ class TunnelCreationDialog(QDialog):
 class TunnelEditDialog(QDialog):
   def __init__(
     self,
-    tunnel_name:str,
+    tunnel_name: str,
     wireguard: Wireguard,
     append_log: callable,
     parent=None
@@ -333,6 +411,7 @@ class TunnelEditDialog(QDialog):
     self.config_file = None
     self.config_dir = None
     self.name_input = None
+    self.highlighter = None
 
     self.init_ui()
 
@@ -347,6 +426,9 @@ class TunnelEditDialog(QDialog):
     self.text_edit = QTextEdit()
     self.text_edit.setFontFamily("Monospace")
     self.text_edit.setFontPointSize(10)
+
+    self.highlighter = WIreGuardHighlighter(self.text_edit)
+
     layout.addLayout(form_layout)
     layout.addWidget(self.text_edit)
 
@@ -976,7 +1058,6 @@ class MainWindow(QMainWindow):
           pos, from_button=True, tunnel_name=n, sender=b
         )
       )
-
       self.left_layout.addWidget(button)
 
     self.set_icon()
@@ -1020,8 +1101,9 @@ class MainWindow(QMainWindow):
     tunnel_name: str = None,
     sender: QWidget = None
   ) -> None:
-    self.selected_tunnel = tunnel_name
     menu = QMenu(self)
+
+    self.selected_tunnel = tunnel_name
 
     len_interfaces = len(self.wireguard.read_interfaces_name())
 
@@ -1194,7 +1276,6 @@ class MainWindow(QMainWindow):
     if not self.selected_tunnel: return
 
     new_state = not is_active
-
     if new_state:
       active_tunnel = None
       for interface in self.wireguard.read_interfaces_name():
@@ -1222,11 +1303,7 @@ class MainWindow(QMainWindow):
       self.append_log(cmd, e.stdout, e.stderr)
       # NOTE: (heycatch) in this place we do not need return, because we need
       # to update the visual state of buttons and indicators.
-      QMessageBox.warning(
-        self,
-        "Error",
-        "Failed to toggle tunnel, most likely an error in the configuration file."
-      )
+      QMessageBox.warning(self, "Error", "Failed to toggle tunnel.")
 
     for i in range(self.left_layout.count()):
       widget = self.left_layout.itemAt(i).widget()

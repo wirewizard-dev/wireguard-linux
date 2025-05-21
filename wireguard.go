@@ -76,7 +76,6 @@ func readInterfacesName() *C.InterfacesNameResponse {
   interfaces := (*C.InterfacesNameResponse)(C.malloc(C.size_t(unsafe.Sizeof(C.InterfacesNameResponse{}))))
   interfaces.Names = (**C.char)(cNames)
   interfaces.Count = C.int(len(devices))
-
   return interfaces
 }
 
@@ -126,7 +125,6 @@ func readConfig(name *C.char) *C.ConfigResponse {
     ips = append(ips, ipNet.String())
   }
 
-  //cfg := (*C.ConfigResponse)(C.malloc(C.size_t(unsafe.Sizeof(C.ConfigResponse{}))))
   cfg.InterfacePrivKey = C.CString(device.PrivateKey.String())
   cfg.InterfacePubKey = C.CString(device.PublicKey.String())
   cfg.InterfaceListenPort = C.int(device.ListenPort)
@@ -189,7 +187,6 @@ func freeInterfacesName(interfaces *C.InterfacesNameResponse) {
       for i := 0; i < int(interfaces.Count); i++ {
         C.free(unsafe.Pointer(names[i]))
       }
-
       C.free(unsafe.Pointer(interfaces.Names))
     }
     C.free(unsafe.Pointer(interfaces))
