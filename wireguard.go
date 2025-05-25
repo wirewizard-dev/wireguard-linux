@@ -4,26 +4,26 @@ package main
 #include <stdlib.h>
 
 typedef struct {
-  char** Names;
-  int Count;
+	char** Names;
+	int Count;
 } InterfacesNameResponse;
 
 typedef struct {
-  char* InterfacePrivKey;
-  char* InterfacePubKey;
-  int InterfaceListenPort;
-  char* InterfaceAddress;
-  char* InterfaceDNS;
+	char* InterfacePrivKey;
+	char* InterfacePubKey;
+	int InterfaceListenPort;
+	char* InterfaceAddress;
+	char* InterfaceDNS;
 
-  char* PeerPubKey;
-  char* PeerEndpointAddress;
-  char* PeerAllowedIPs;
-  char* PeerPersistentKeepalive;
+	char* PeerPubKey;
+	char* PeerEndpointAddress;
+	char* PeerAllowedIPs;
+	char* PeerPersistentKeepalive;
 } ConfigResponse;
 
 typedef struct {
-  char* LastHandshakeTime;
-  char* Transfer;
+	char* LastHandshakeTime;
+	char* Transfer;
 } StatsResponse;
 */
 import "C"
