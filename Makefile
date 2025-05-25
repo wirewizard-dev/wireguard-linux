@@ -34,4 +34,4 @@ test:
 	flake8 --config=config.cfg wireguard.py
 
 fmt:
-	gofmt -w wireguard.go
+	gofmt -w .
