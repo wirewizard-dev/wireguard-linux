@@ -73,19 +73,21 @@ func copyFileOrDir(src, dest string) error {
 }
 
 /*
-dpkg -f wireugard-linux_{version}_amd64.deb
-
 7z x wireugard-linux_{version}_amd64.deb
 tar -xf data.tar
 
+dpkg -f wireugard-linux_{version}_amd64.deb
 sudo dpkg -i linux_{version}_amd64.deb
-sudo apt install ./wireugard-linux_{version}_amd64.deb
 */
 func main() {
 	version := flag.String("version", "", "Version of the package")
 	flag.Parse()
 
 	fmt.Printf("Building DEB package (version: %s)...\n", *version)
+
+	if _, err := exec.Command("dpkg", "-l", "wireguard-tools").Output(); err != nil {
+		log.Fatalln("Required package 'wireguard-tools' is not installed. Please install it to proceed.")
+	}
 
 	debDir := "build"
 	dirs := []string{
@@ -108,6 +110,7 @@ Version: %s
 Architecture: amd64
 Maintainer: heycatch <andreyisback@yandex.ru>
 Description: Linux desktop application for managing WireGuard tunnels
+Depends: wireguard-tools
 `, *version)
 
 	controlPath := filepath.Join(debDir, "DEBIAN", "control")

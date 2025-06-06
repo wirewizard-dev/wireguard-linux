@@ -205,7 +205,7 @@ class Wireguard:
   def _str_decode(self, c_str: ctypes.c_char_p) -> str:
     return c_str.decode("utf-8") if c_str else ""
 
-class WIreGuardHighlighter(QSyntaxHighlighter):
+class WireGuardHighlighter(QSyntaxHighlighter):
   def __init__(self, parent=None):
     super().__init__(parent)
 
@@ -308,7 +308,7 @@ class TunnelCreationDialog(QDialog):
     self.text_edit.setFontPointSize(10)
     self.text_edit.setPlainText("[Interface]" + "\n" + f"PrivateKey = {priv_key}")
 
-    self.highlighter = WIreGuardHighlighter(self.text_edit)
+    self.highlighter = WireGuardHighlighter(self.text_edit)
 
     button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
     button_box.setStyleSheet(
@@ -427,7 +427,7 @@ class TunnelEditDialog(QDialog):
     self.text_edit.setFontFamily("Monospace")
     self.text_edit.setFontPointSize(10)
 
-    self.highlighter = WIreGuardHighlighter(self.text_edit)
+    self.highlighter = WireGuardHighlighter(self.text_edit)
 
     layout.addLayout(form_layout)
     layout.addWidget(self.text_edit)
