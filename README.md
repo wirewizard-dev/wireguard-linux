@@ -16,9 +16,9 @@
 
 ### Install
 ```bash
-wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.6/wireguard-linux_1.0.6_amd64.deb
+wget https://github.com/wirewizarddev/wireguard-linux/releases/download/v1.0.7/wireguard-linux_1.0.7_amd64.deb
 
-sudo dpkg -i wireguard-linux_1.0.6_amd64.deb
+sudo dpkg -i wireguard-linux_1.0.7_amd64.deb
 ```
 
 ### Build from source

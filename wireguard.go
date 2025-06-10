@@ -5,16 +5,15 @@ package main
 
 typedef struct {
 	char** Names;
-	int Count;
+	int    Count;
 } InterfacesNameResponse;
 
 typedef struct {
 	char* InterfacePrivKey;
 	char* InterfacePubKey;
-	int InterfaceListenPort;
+	int   InterfaceListenPort;
 	char* InterfaceAddress;
 	char* InterfaceDNS;
-
 	char* PeerPubKey;
 	char* PeerEndpointAddress;
 	char* PeerAllowedIPs;
@@ -29,6 +28,7 @@ typedef struct {
 import "C"
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,7 +43,7 @@ import (
 func readInterfacesName() *C.InterfacesNameResponse {
 	configDirs := []string{
 		"/etc/wireguard/",
-		"/usr/local/etc/wiregiard/",
+		"/usr/local/etc/wireguard/",
 	}
 
 	devices := make([]string, 0)
@@ -88,13 +88,11 @@ func readConfig(name *C.char) *C.ConfigResponse {
 	defer client.Close()
 
 	cfg := (*C.ConfigResponse)(C.malloc(C.size_t(unsafe.Sizeof(C.ConfigResponse{}))))
-	// NOTE: (heycatch) interface information.
 	cfg.InterfacePrivKey = C.CString("")
 	cfg.InterfacePubKey = C.CString("")
 	cfg.InterfaceListenPort = 0
 	cfg.InterfaceAddress = C.CString("")
 	cfg.InterfaceDNS = C.CString("")
-	// NOTE: (heycatch) peer information.
 	cfg.PeerPubKey = C.CString("")
 	cfg.PeerEndpointAddress = C.CString("")
 	cfg.PeerAllowedIPs = C.CString("")
@@ -184,7 +182,7 @@ func freeInterfacesName(interfaces *C.InterfacesNameResponse) {
 		if interfaces.Count > 0 {
 			names := (*[1 << 30]*C.char)(unsafe.Pointer(interfaces.Names))[:interfaces.Count:interfaces.Count]
 
-			for i := 0; i < int(interfaces.Count); i++ {
+			for i := range int(interfaces.Count) {
 				C.free(unsafe.Pointer(names[i]))
 			}
 			C.free(unsafe.Pointer(interfaces.Names))
@@ -258,17 +256,15 @@ func parseConfig(interfaceName string) (string, string, string) {
 			continue
 		}
 
-		lines := strings.Split(string(data), "\n")
-
-		for _, line := range lines {
-			if strings.HasPrefix(line, "Address = ") {
-				address = strings.TrimPrefix(line, "Address = ")
+		for line := range bytes.SplitSeq(data, []byte{'\n'}) {
+			if bytes.HasPrefix(line, []byte("Address = ")) {
+				address = string(bytes.TrimPrefix(line, []byte("Address = ")))
 			}
-			if strings.HasPrefix(line, "DNS = ") {
-				dns = strings.TrimPrefix(line, "DNS = ")
+			if bytes.HasPrefix(line, []byte("DNS = ")) {
+				dns = string(bytes.TrimPrefix(line, []byte("DNS = ")))
 			}
-			if strings.HasPrefix(line, "PersistentKeepalive = ") {
-				alive = strings.TrimPrefix(line, "PersistentKeepalive = ")
+			if bytes.HasPrefix(line, []byte("PersistentKeepalive = ")) {
+				alive = string(bytes.TrimPrefix(line, []byte("PersistentKeepalive = ")))
 			}
 		}
 	}
@@ -290,14 +286,12 @@ func parseKeys(interfaceName string) (string, string) {
 			continue
 		}
 
-		lines := strings.Split(string(data), "\n")
-
-		for _, line := range lines {
-			if strings.HasPrefix(line, "PrivateKey = ") {
-				privKey = strings.TrimPrefix(line, "PrivateKey = ")
+		for line := range bytes.SplitSeq(data, []byte{'\n'}) {
+			if bytes.HasPrefix(line, []byte("PrivateKey = ")) {
+				privKey = string(bytes.TrimPrefix(line, []byte("PrivateKey = ")))
 			}
-			if strings.HasPrefix(line, "PublicKey = ") {
-				pubKey = strings.TrimPrefix(line, "PublicKey = ")
+			if bytes.HasPrefix(line, []byte("PublicKey = ")) {
+				pubKey = string(bytes.TrimPrefix(line, []byte("PublicKey = ")))
 			}
 		}
 	}
@@ -314,10 +308,14 @@ func parseKeys(interfaceName string) (string, string) {
 	return "", ""
 }
 
-// NOTE: (heycatch) the old variant via 'time.Parse' is removed and
-// the method on O(1) slices is simply implemented.
+// NOTE: (heycatch) the old variant via 'time.Parse' is removed,
+// and implemented using strings.Builder.
 func parseTime(handshake string) string {
-	return handshake[11:19] + handshake[len(handshake)-4:]
+	var b strings.Builder
+	b.Grow(12)
+	b.WriteString(handshake[11:19])
+	b.WriteString(handshake[len(handshake)-4:])
+	return b.String()
 }
 
 func parseTraffic(receive, transmit int64) string {

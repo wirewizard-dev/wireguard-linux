@@ -1263,7 +1263,25 @@ class MainWindow(QMainWindow):
     self.bottom_layout.addWidget(self.edit_button)
 
   def edit_tunnel(self) -> None:
-    dialog = TunnelEditDialog(self.selected_tunnel, self.wireguard, self.append_log, self)
+    tunnel_name = None
+
+    for i in range(self.right_layout.count()):
+      widget = self.right_layout.itemAt(i).widget()
+      if isinstance(widget, TunnelConfigWidget):
+        self.selected_tunnel = widget.name
+        break
+
+    if tunnel_name is None: tunnel_name = self.selected_tunnel
+
+    if tunnel_name is None:
+      QMessageBox.warning(self, "Error", "No tunnel selected.")
+      return
+
+    # NOTE: (heycatch) when you right-click with an active tunnel in right_panel,
+    # self.selected_tunnel is reset and we cannot change the configuration file.
+    # A check for the existence of right_panel has been added.
+    # self.selected_tunnel -> tunnel_name.
+    dialog = TunnelEditDialog(tunnel_name, self.wireguard, self.append_log, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
       self.load_interfaces()
 
