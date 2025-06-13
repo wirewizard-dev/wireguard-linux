@@ -30,7 +30,8 @@ from PySide6.QtWidgets import (
   QGroupBox,
   QScrollArea,
   QSpacerItem,
-  QSystemTrayIcon
+  QSystemTrayIcon,
+  QStyle
 )
 from PySide6.QtGui import (
   QIcon,
@@ -355,8 +356,10 @@ class TunnelCreationDialog(QDialog):
       QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
-    # NOTE: (heycatch) interface naming rules are present in man8.
-    # Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    """
+    NOTE: (heycatch) interface naming rules are present in man8.
+    Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    """
     if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_=+.-]{1,15}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
@@ -521,8 +524,10 @@ class TunnelEditDialog(QDialog):
       QMessageBox.warning(self, "Error", "Tunnel name cannot be empty.")
       return False
 
-    # NOTE: (heycatch) interface naming rules are present in man8.
-    # Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    """
+    NOTE: (heycatch) interface naming rules are present in man8.
+    Link: https://www.man7.org/linux/man-pages/man8/wg-quick.8.html
+    """
     if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_=+.-]{1,15}[a-zA-Z0-9])?$", name):
       QMessageBox.warning(
         self,
@@ -688,7 +693,7 @@ class TunnelConfigWidget(QWidget):
       label.setAlignment(Qt.AlignmentFlag.AlignRight)
       if value:
         value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; }")
+        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
         value_edit.setReadOnly(True)
         field_layout.addWidget(label)
         field_layout.addWidget(value_edit)
@@ -752,7 +757,7 @@ class TunnelConfigWidget(QWidget):
 
       if value:
         value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; }")
+        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
         value_edit.setReadOnly(True)
 
         field_layout.addWidget(label)
@@ -886,7 +891,9 @@ class MainWindow(QMainWindow):
     self.buttons_layout = QHBoxLayout()
     self.buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-    add_tunnel_btn = QPushButton("⚙️ Add Tunnel")
+    # NOTE: (heycatch) indentation left at the beginning on purpose.
+    add_tunnel_btn = QPushButton(" Add Tunnel")
+    add_tunnel_btn.setIcon(self.style().standardIcon(QStyle.SP_DriveNetIcon))
     add_tunnel_btn.setFixedSize(110, 25)
     add_tunnel_menu = QMenu(self)
     import_action = add_tunnel_menu.addAction("Import tunnel(s) from file...")
@@ -894,23 +901,40 @@ class MainWindow(QMainWindow):
     add_action = add_tunnel_menu.addAction("Add empty tunnel...")
     add_action.triggered.connect(self.create_tunnel)
     add_tunnel_btn.setMenu(add_tunnel_menu)
+    add_tunnel_btn.setStyleSheet(
+      """
+      QPushButton::menu-indicator {
+        subcontrol-origin: padding;
+        subcontrol-position: right center;
+        width: 10px;
+        height: 10px;
+        margin-right: 2px;
+      }
+      """
+    )
     self.buttons_layout.addWidget(add_tunnel_btn)
 
-    separator_one = QLabel("|")
+    separator_one = QFrame()
+    separator_one.setFrameShape(QFrame.VLine)
+    separator_one.setFrameShadow(QFrame.Sunken)
     separator_one.setFixedSize(8, 25)
     self.buttons_layout.addWidget(separator_one)
 
-    delete_button = QPushButton("❌")
-    delete_button.setFixedSize(50, 25)
-    delete_button.setToolTip("Remove selected tunnel(s)...")
-    delete_button.clicked.connect(self.remove_tunnel)
-    self.buttons_layout.addWidget(delete_button)
+    delete_btn = QPushButton()
+    delete_btn.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
+    delete_btn.setFixedSize(50, 25)
+    delete_btn.setToolTip("Remove selected tunnel(s)...")
+    delete_btn.clicked.connect(self.remove_tunnel)
+    self.buttons_layout.addWidget(delete_btn)
 
-    separator_two = QLabel("|")
+    separator_two = QFrame()
+    separator_two.setFrameShape(QFrame.VLine)
+    separator_two.setFrameShadow(QFrame.Sunken)
     separator_two.setFixedSize(8, 25)
     self.buttons_layout.addWidget(separator_two)
 
-    export_btn = QPushButton("📥")
+    export_btn = QPushButton()
+    export_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogNewFolder))
     export_btn.setFixedSize(50, 25)
     export_btn.setToolTip("Export all tunnels to zip...")
     export_btn.clicked.connect(self.export_tunnels)
@@ -1064,8 +1088,7 @@ class MainWindow(QMainWindow):
 
     self.left_layout.addStretch()
 
-  # NOTE: (heycatch) if logs exceed the 6MB limit,
-  # half of the old logs are cleaned up.
+  # NOTE: (heycatch) if logs exceed the 6MB limit, half of the old logs are cleaned up.
   def append_log(self, cmd: List[str], stdout: str, stderr: str) -> None:
     date = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
     self.logs += f"{date} {' '.join(cmd)}:\n{stdout}{stderr}\n"
@@ -1277,10 +1300,12 @@ class MainWindow(QMainWindow):
       QMessageBox.warning(self, "Error", "No tunnel selected.")
       return
 
-    # NOTE: (heycatch) when you right-click with an active tunnel in right_panel,
-    # self.selected_tunnel is reset and we cannot change the configuration file.
-    # A check for the existence of right_panel has been added.
-    # self.selected_tunnel -> tunnel_name.
+    """
+    NOTE: (heycatch) when you right-click with an active tunnel in right_panel,
+    self.selected_tunnel is reset and we cannot change the configuration file.
+    A check for the existence of right_panel has been added.
+    self.selected_tunnel -> tunnel_name.
+    """
     dialog = TunnelEditDialog(tunnel_name, self.wireguard, self.append_log, self)
     if dialog.exec() == QDialog.DialogCode.Accepted:
       self.load_interfaces()
@@ -1319,8 +1344,10 @@ class MainWindow(QMainWindow):
       self.append_log(cmd, res.stdout, res.stderr)
     except subprocess.CalledProcessError as e:
       self.append_log(cmd, e.stdout, e.stderr)
-      # NOTE: (heycatch) in this place we do not need return, because we need
-      # to update the visual state of buttons and indicators.
+      """
+      NOTE: (heycatch) in this place we do not need return,
+      because we need to update the visual state of buttons and indicators.
+      """
       QMessageBox.warning(self, "Error", "Failed to toggle tunnel.")
 
     for i in range(self.left_layout.count()):

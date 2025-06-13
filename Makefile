@@ -24,7 +24,7 @@ uninstall:
 	@sudo rm /usr/share/polkit-1/actions/org.freedesktop.wirewizard.policy
 
 dev:
-	sudo LOCAL=ON venv/bin/python3.11 wireguard.py
+	sudo LOCAL=ON venv/bin/python3 wireguard.py
 
 memory:
 	@PID=$$(ps aux | grep [w]ireguard | head -n 1 | awk '{print $$2}') && \
