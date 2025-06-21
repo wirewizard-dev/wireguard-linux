@@ -32,15 +32,15 @@ source venv/bin/activate
 pip3 install -r requirements.txt
 
 make build
-
 make install
-
 make clear
 
 deactivate
 ```
 
 ### FAQ
+- My dependency package has a different name. How do I install the deb package?
+  * sudo dpkg --force-depends -i wireguard-linux_x.x.x_amd64.deb
 - Why a binary file is ~**60** MB?
   * Because it's _Python_... Default libs ~**15** MB + PySide6 ~**40** MB + Source code ~**5**-**10** MB.
 - How much _memory_ does the application consume?
@@ -50,12 +50,11 @@ deactivate
 
 ### Development
 ```bash
-make sdk
-
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
 
+make sdk
 make dev
 ```
 
