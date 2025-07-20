@@ -766,7 +766,7 @@ class TunnelConfigWidget(QWidget):
       field_layout.addWidget(label)
       field_layout.addWidget(value_edit)
 
-      if label_text in ("Latest handshake:  ", "Transfer: "):
+      if label_text in ("Latest handshake:  ", "Transfer:  "):
         self.field_widget[label_text] = value_edit
 
       peer_layout.addLayout(field_layout)
@@ -790,10 +790,10 @@ class TunnelConfigWidget(QWidget):
 
     stats = self.wireguard.read_stats(self.name)
     if stats:
-      if "Last_HS:" in self.field_widget:
-        self.field_widget["Last_HS:"].setText(stats.get("last_handshake", ""))
-      if "Transfer:" in self.field_widget:
-        self.field_widget["Transfer:"].setText(stats.get("transfer", ""))
+      if "Latest handshake:  " in self.field_widget:
+        self.field_widget["Latest handshake:  "].setText(stats.get("last_handshake", ""))
+      if "Transfer:  " in self.field_widget:
+        self.field_widget["Transfer:  "].setText(stats.get("transfer", ""))
 
 class MainWindow(QMainWindow):
   def __init__(self):
