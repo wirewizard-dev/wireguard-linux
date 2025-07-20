@@ -662,7 +662,7 @@ class TunnelConfigWidget(QWidget):
     interface_layout.setSpacing(5)
 
     status_layout = QHBoxLayout()
-    status_label = QLabel("Status:")
+    status_label = QLabel("Status: ")
     status_label.setFixedWidth(80)
     status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
     self.status_indicator = QLabel()
@@ -670,7 +670,7 @@ class TunnelConfigWidget(QWidget):
     self.status_indicator.setStyleSheet(
       f"background-color: {'#4CAF50' if is_active else '#808080'}; border-radius: 5px;"
     )
-    status_text = QLabel("Active" if is_active else "Inactive")
+    status_text = QLabel(" Active" if is_active else " Inactive")
     status_layout.addWidget(status_label)
     status_layout.addWidget(self.status_indicator)
     status_layout.addWidget(status_text)
@@ -678,13 +678,13 @@ class TunnelConfigWidget(QWidget):
     interface_layout.addLayout(status_layout)
 
     inteface_fields = [
-      ("Public Key:", config.get("interface_pub_key", "")),
-      ("Listen Port:", str(
+      ("Public key: ", config.get("interface_pub_key", "")),
+      ("Listen port: ", str(
         config.get(
           "interface_listen_port"
         )) if config.get("interface_listen_port", 0) else ""),
-      ("Address:", config.get("interface_address", "")),
-      ("DNS:", config.get("interface_dns", ""))
+      ("Addresses: ", config.get("interface_address", "")),
+      ("DNS servers: ", config.get("interface_dns", ""))
     ]
     for label_text, value in inteface_fields:
       field_layout = QHBoxLayout()
@@ -695,6 +695,7 @@ class TunnelConfigWidget(QWidget):
         value_edit = QLineEdit(value)
         value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
         value_edit.setReadOnly(True)
+
         field_layout.addWidget(label)
         field_layout.addWidget(value_edit)
         interface_layout.addLayout(field_layout)
@@ -741,12 +742,12 @@ class TunnelConfigWidget(QWidget):
     peer_layout.setContentsMargins(10, 10, 10, 10)
     peer_layout.setSpacing(5)
     peer_fields = [
-      ("Public Key:", config.get("peer_pub_key", "")),
-      ("Allowed IPs:", config.get("peer_allowed_ips", "")),
-      ("Endpoint:", config.get("peer_endpoint_address", "")),
-      ("P_Keepalive:", config.get("peer_keep_alive", "")),
-      ("Last_HS:", stats.get("last_handshake", "")),
-      ("Transfer:", stats.get("transfer", ""))
+      ("Public key: ", config.get("peer_pub_key", "")),
+      ("Allowed IPs: ", config.get("peer_allowed_ips", "")),
+      ("Endpoint: ", config.get("peer_endpoint_address", "")),
+      ("Persistent keepalive: ", config.get("peer_keep_alive", "")),
+      ("Latest handshake: ", stats.get("last_handshake", "")),
+      ("Transfer: ", stats.get("transfer", ""))
     ]
     for label_text, value in peer_fields:
       field_layout = QHBoxLayout()
@@ -763,10 +764,10 @@ class TunnelConfigWidget(QWidget):
         field_layout.addWidget(label)
         field_layout.addWidget(value_edit)
 
-        if label_text in ("Last_HS:", "Transfer:"):
-          self.field_widget[label_text] = value_edit
+        if label_text in ("Last_HS:", "Transfer:"): self.field_widget[label_text] = value_edit
 
         peer_layout.addLayout(field_layout)
+
     peer_group.setLayout(peer_layout)
 
     self.layout.addWidget(interface_group)
