@@ -642,9 +642,7 @@ class TunnelConfigWidget(QWidget):
 
     self.field_widget = {}
 
-    interface_group = QGroupBox(f"Interface: {name}")
-    interface_group.setStyleSheet(
-      """
+    group_style = """
       QGroupBox {
         border: 1px solid #ada9aa;
         margin-top: 10px;
@@ -655,16 +653,33 @@ class TunnelConfigWidget(QWidget):
         subcontrol-position: top left;
         left: 10px;
       }
-      """
-    )
+    """
+
+    interface_group = QGroupBox(f"Interface: {name}")
+    interface_group.setStyleSheet(group_style)
     interface_layout = QVBoxLayout()
     interface_layout.setContentsMargins(10, 10, 10, 10)
     interface_layout.setSpacing(5)
 
+    inteface_fields = [
+      ("Public key:  ", config.get("interface_pub_key", "")),
+      ("Listen port:  ", str(
+        config.get(
+          "interface_listen_port"
+        )) if config.get("interface_listen_port", 0) else ""),
+      ("Addresses:  ", config.get("interface_address", "")),
+      ("DNS servers:  ", config.get("interface_dns", ""))
+    ]
+
+    interface_label_width = []
+    for label_text, value in inteface_fields:
+      if value: interface_label_width.append(self.fontMetrics().horizontalAdvance(label_text))
+    interface_max_width = max(interface_label_width)
+
     status_layout = QHBoxLayout()
-    status_label = QLabel("Status: ")
-    status_label.setFixedWidth(80)
-    status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+    status_label = QLabel("Status:  ")
+    status_label.setFixedWidth(interface_max_width)
+    status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     self.status_indicator = QLabel()
     self.status_indicator.setFixedSize(12, 12)
     self.status_indicator.setStyleSheet(
@@ -677,31 +692,25 @@ class TunnelConfigWidget(QWidget):
     status_layout.addStretch()
     interface_layout.addLayout(status_layout)
 
-    inteface_fields = [
-      ("Public key: ", config.get("interface_pub_key", "")),
-      ("Listen port: ", str(
-        config.get(
-          "interface_listen_port"
-        )) if config.get("interface_listen_port", 0) else ""),
-      ("Addresses: ", config.get("interface_address", "")),
-      ("DNS servers: ", config.get("interface_dns", ""))
-    ]
     for label_text, value in inteface_fields:
+      if not value: continue
+
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
-      label.setFixedWidth(80)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight)
-      if value:
-        value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
-        value_edit.setReadOnly(True)
+      label.setFixedWidth(interface_max_width)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-        field_layout.addWidget(label)
-        field_layout.addWidget(value_edit)
-        interface_layout.addLayout(field_layout)
+      value_edit = QLabel(value)
+      value_edit.setWordWrap(True)
+      value_edit.setStyleSheet("background-color: #fbfbfb;")
+      value_edit.setToolTip(value)
+
+      field_layout.addWidget(label)
+      field_layout.addWidget(value_edit)
+      interface_layout.addLayout(field_layout)
 
     button_layout = QHBoxLayout()
-    button_layout.addSpacerItem(QSpacerItem(85, 0))
+    button_layout.addSpacerItem(QSpacerItem(interface_max_width + 5, 0))
     self.active_button = QPushButton("Activate" if not is_active else "Deactivate")
     self.active_button.setFixedSize(100, 25)
     self.active_button.setStyleSheet(
@@ -716,57 +725,51 @@ class TunnelConfigWidget(QWidget):
       }
       """
     )
-
     button_layout.addWidget(self.active_button)
     button_layout.addStretch()
     interface_layout.addLayout(button_layout)
-
     interface_group.setLayout(interface_layout)
 
     peer_group = QGroupBox("Peer")
-    peer_group.setStyleSheet(
-      """
-      QGroupBox {
-        border: 1px solid #ada9aa;
-        margin-top: 10px;
-        font-size: 12px;
-      }
-      QGroupBox:title {
-        subcontrol-origin: margin;
-        subcontrol-position: top left;
-        left: 10px;
-      }
-      """
-    )
+    peer_group.setStyleSheet(group_style)
     peer_layout = QVBoxLayout()
     peer_layout.setContentsMargins(10, 10, 10, 10)
     peer_layout.setSpacing(5)
+
     peer_fields = [
-      ("Public key: ", config.get("peer_pub_key", "")),
-      ("Allowed IPs: ", config.get("peer_allowed_ips", "")),
-      ("Endpoint: ", config.get("peer_endpoint_address", "")),
-      ("Persistent keepalive: ", config.get("peer_keep_alive", "")),
-      ("Latest handshake: ", stats.get("last_handshake", "")),
-      ("Transfer: ", stats.get("transfer", ""))
+      ("Public key:  ", config.get("peer_pub_key", "")),
+      ("Allowed IPs:  ", config.get("peer_allowed_ips", "")),
+      ("Endpoint:  ", config.get("peer_endpoint_address", "")),
+      ("Persistent keepalive:  ", config.get("peer_keep_alive", "")),
+      ("Latest handshake:  ", stats.get("last_handshake", "")),
+      ("Transfer:  ", stats.get("transfer", ""))
     ]
+
+    peer_label_widths = []
     for label_text, value in peer_fields:
+      if value: peer_label_widths.append(self.fontMetrics().horizontalAdvance(label_text))
+    peer_max_width = max(peer_label_widths)
+
+    for label_text, value in peer_fields:
+      if not value: continue
+
       field_layout = QHBoxLayout()
-
       label = QLabel(label_text)
-      label.setFixedWidth(80)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight)
+      label.setFixedWidth(peer_max_width)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-      if value:
-        value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
-        value_edit.setReadOnly(True)
+      value_edit = QLabel(value)
+      value_edit.setWordWrap(True)
+      value_edit.setStyleSheet("background-color: #fbfbfb;")
+      value_edit.setToolTip(value)
 
-        field_layout.addWidget(label)
-        field_layout.addWidget(value_edit)
+      field_layout.addWidget(label)
+      field_layout.addWidget(value_edit)
 
-        if label_text in ("Last_HS:", "Transfer:"): self.field_widget[label_text] = value_edit
+      if label_text in ("Latest handshake:  ", "Transfer: "):
+        self.field_widget[label_text] = value_edit
 
-        peer_layout.addLayout(field_layout)
+      peer_layout.addLayout(field_layout)
 
     peer_group.setLayout(peer_layout)
 
