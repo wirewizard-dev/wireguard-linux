@@ -717,7 +717,7 @@ class TunnelConfigWidget(QWidget):
       convenient way besides 'setMaximumHeight'.
       """
       value_edit.document().setDocumentMargin(0)
-      if len(value) >= 44 and interface_max_length >= 19 and is_active:
+      if is_active and (len(value) >= 44 and interface_max_length >= 19) or len(value) >= 63:
         value_edit.setMaximumHeight(30)
       else:
         value_edit.setMaximumHeight(20)
@@ -793,7 +793,7 @@ class TunnelConfigWidget(QWidget):
       convenient way besides 'setMaximumHeight'.
       """
       value_edit.document().setDocumentMargin(0)
-      if len(value) >= 44 and peer_max_length >= 19 and is_active:
+      if is_active and (len(value) >= 44 and peer_max_length >= 19) or len(value) >= 63:
         value_edit.setMaximumHeight(30)
       else:
         value_edit.setMaximumHeight(20)
