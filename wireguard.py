@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
   QScrollArea,
   QSpacerItem,
   QSystemTrayIcon,
-  QStyle
+  QStyle,
+  QSizePolicy
 )
 from PySide6.QtGui import (
   QIcon,
@@ -675,17 +676,19 @@ class TunnelConfigWidget(QWidget):
     for label_text, value in inteface_fields:
       if value: interface_label_width.append(self.fontMetrics().horizontalAdvance(label_text))
     interface_max_width = max(interface_label_width)
+    interface_max_length = max(len(field[0]) if field[1] else 0 for field in inteface_fields)
 
     status_layout = QHBoxLayout()
     status_label = QLabel("Status:  ")
     status_label.setFixedWidth(interface_max_width)
     status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    status_label.setFixedHeight(20)
     self.status_indicator = QLabel()
-    self.status_indicator.setFixedSize(12, 12)
+    self.status_indicator.setFixedSize(11, 11)
     self.status_indicator.setStyleSheet(
       f"background-color: {'#4CAF50' if is_active else '#808080'}; border-radius: 5px;"
     )
-    status_text = QLabel(" Active" if is_active else " Inactive")
+    status_text = QLabel("Active" if is_active else "Inactive")
     status_layout.addWidget(status_label)
     status_layout.addWidget(self.status_indicator)
     status_layout.addWidget(status_text)
@@ -698,12 +701,28 @@ class TunnelConfigWidget(QWidget):
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
       label.setFixedWidth(interface_max_width)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
-      value_edit = QLabel(value)
-      value_edit.setWordWrap(True)
+      value_edit = QTextEdit(value)
+      value_edit.setReadOnly(True)
+      value_edit.setFrameStyle(QFrame.NoFrame)
+      value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      value_edit.setAlignment(Qt.AlignmentFlag.AlignTop)
+      """
+      NOTE: (heycatch) we use QTextEdit for convenient line wrapping,
+      but it has an internal frame that needs to be removed for correct
+      display. To do this, we we use 'document().setDocumentMargin(0)' and
+      a fixed length in 'setMaximumHeight' for normal bottom maring.
+      TODO: (heycatch) find a more dynamic and
+      convenient way besides 'setMaximumHeight'.
+      """
+      value_edit.document().setDocumentMargin(0)
+      if len(value) >= 44 and interface_max_length >= 19 and is_active:
+        value_edit.setMaximumHeight(30)
+      else:
+        value_edit.setMaximumHeight(20)
+      value_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
       value_edit.setStyleSheet("background-color: #fbfbfb;")
-      value_edit.setToolTip(value)
 
       field_layout.addWidget(label)
       field_layout.addWidget(value_edit)
@@ -738,6 +757,7 @@ class TunnelConfigWidget(QWidget):
 
     peer_fields = [
       ("Public key:  ", config.get("peer_pub_key", "")),
+      # TODO: (heycatch) add support "Preshared key".
       ("Allowed IPs:  ", config.get("peer_allowed_ips", "")),
       ("Endpoint:  ", config.get("peer_endpoint_address", "")),
       ("Persistent keepalive:  ", config.get("peer_keep_alive", "")),
@@ -749,6 +769,7 @@ class TunnelConfigWidget(QWidget):
     for label_text, value in peer_fields:
       if value: peer_label_widths.append(self.fontMetrics().horizontalAdvance(label_text))
     peer_max_width = max(peer_label_widths)
+    peer_max_length = max(len(field[0]) if field[1] else 0 for field in peer_fields)
 
     for label_text, value in peer_fields:
       if not value: continue
@@ -756,12 +777,28 @@ class TunnelConfigWidget(QWidget):
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
       label.setFixedWidth(peer_max_width)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
-      value_edit = QLabel(value)
-      value_edit.setWordWrap(True)
+      value_edit = QTextEdit(value)
+      value_edit.setReadOnly(True)
+      value_edit.setFrameStyle(QFrame.NoFrame)
+      value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      value_edit.setAlignment(Qt.AlignmentFlag.AlignTop)
+      """
+      NOTE: (heycatch) we use QTextEdit for convenient line wrapping,
+      but it has an internal frame that needs to be removed for correct
+      display. To do this, we we use 'document().setDocumentMargin(0)' and
+      a fixed length in 'setMaximumHeight' for normal bottom maring.
+      TODO: (heycatch) find a more dynamic and
+      convenient way besides 'setMaximumHeight'.
+      """
+      value_edit.document().setDocumentMargin(0)
+      if len(value) >= 44 and peer_max_length >= 19 and is_active:
+        value_edit.setMaximumHeight(30)
+      else:
+        value_edit.setMaximumHeight(20)
+      value_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
       value_edit.setStyleSheet("background-color: #fbfbfb;")
-      value_edit.setToolTip(value)
 
       field_layout.addWidget(label)
       field_layout.addWidget(value_edit)
