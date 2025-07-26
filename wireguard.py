@@ -1167,6 +1167,13 @@ class MainWindow(QMainWindow):
   ) -> None:
     menu = QMenu(self)
 
+    """
+    NOTE: (heycatch) this condition is required when the tunnel is active
+    in order to correctly press the "Activate/Deactivate" button.
+    """
+    if not from_button and not tunnel_name and self.selected_tunnel:
+      tunnel_name = self.selected_tunnel
+
     self.selected_tunnel = tunnel_name
 
     len_interfaces = len(self.wireguard.read_interfaces_name())
