@@ -101,7 +101,8 @@ class Wireguard:
         ("PeerPubKey", ctypes.c_char_p),
         ("PeerEndpointAddress", ctypes.c_char_p),
         ("PeerAllowedIPs", ctypes.c_char_p),
-        ("PeerPersistentKeepalive", ctypes.c_char_p)
+        ("PeerPersistentKeepalive", ctypes.c_char_p),
+        ("PeerPresharedKey", ctypes.c_char_p)
       ]
 
     class StatsResponse(ctypes.Structure):
@@ -185,7 +186,8 @@ class Wireguard:
         "peer_pub_key": self._str_decode(cfg.PeerPubKey),
         "peer_endpoint_address": self._str_decode(cfg.PeerEndpointAddress),
         "peer_allowed_ips": self._str_decode(cfg.PeerAllowedIPs),
-        "peer_keep_alive": self._str_decode(cfg.PeerPersistentKeepalive)
+        "peer_keep_alive": self._str_decode(cfg.PeerPersistentKeepalive),
+        "peer_psk_key": self._str_decode(cfg.PeerPresharedKey)
       }
     finally:
       self.wg.freeConfig(cfg_ptr)
@@ -249,7 +251,7 @@ class WireGuardHighlighter(QSyntaxHighlighter):
         self.key_format
       )
 
-      if key_value_match.captured(1) in ["PrivateKey", "PublicKey"]:
+      if key_value_match.captured(1) in ["PrivateKey", "PublicKey", "PresharedKey"]:
         self.setFormat(
           key_value_match.capturedStart(2),
           key_value_match.capturedLength(2),
@@ -757,7 +759,7 @@ class TunnelConfigWidget(QWidget):
 
     peer_fields = [
       ("Public key:  ", config.get("peer_pub_key", "")),
-      # TODO: (heycatch) add support "Preshared key".
+      ("Preshared key:  ", "enabled" if config.get("peer_psk_key", "") else ""),
       ("Allowed IPs:  ", config.get("peer_allowed_ips", "")),
       ("Endpoint:  ", config.get("peer_endpoint_address", "")),
       ("Persistent keepalive:  ", config.get("peer_keep_alive", "")),
@@ -1173,8 +1175,6 @@ class MainWindow(QMainWindow):
     """
     if not from_button and not tunnel_name and self.selected_tunnel:
       tunnel_name = self.selected_tunnel
-
-    self.selected_tunnel = tunnel_name
 
     len_interfaces = len(self.wireguard.read_interfaces_name())
 

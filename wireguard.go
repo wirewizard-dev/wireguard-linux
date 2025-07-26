@@ -18,6 +18,7 @@ typedef struct {
 	char* PeerEndpointAddress;
 	char* PeerAllowedIPs;
 	char* PeerPersistentKeepalive;
+	char* PeerPresharedKey;
 } ConfigResponse;
 
 typedef struct {
@@ -33,6 +34,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.zx2c4.com/wireguard/wgctrl"
@@ -97,6 +99,7 @@ func readConfig(name *C.char) *C.ConfigResponse {
 	cfg.PeerEndpointAddress = C.CString("")
 	cfg.PeerAllowedIPs = C.CString("")
 	cfg.PeerPersistentKeepalive = C.CString("")
+	cfg.PeerPresharedKey = C.CString("")
 
 	device, err := client.Device(C.GoString(name))
 	if err != nil {
@@ -114,7 +117,7 @@ func readConfig(name *C.char) *C.ConfigResponse {
 		return nil
 	}
 
-	address, dns, alive := parseConfig(C.GoString(name))
+	address, dns, alive, psk := parseConfig(C.GoString(name))
 
 	peer := device.Peers[0]
 
@@ -132,6 +135,7 @@ func readConfig(name *C.char) *C.ConfigResponse {
 	cfg.PeerEndpointAddress = C.CString(peer.Endpoint.String())
 	cfg.PeerAllowedIPs = C.CString(strings.Join(ips, ","))
 	cfg.PeerPersistentKeepalive = C.CString(alive)
+	cfg.PeerPresharedKey = C.CString(psk)
 	return cfg
 }
 
@@ -158,7 +162,7 @@ func readStats(name *C.char) *C.StatsResponse {
 
 	peer := device.Peers[0]
 
-	cfg.LastHandshakeTime = C.CString(parseTime(peer.LastHandshakeTime.String()))
+	cfg.LastHandshakeTime = C.CString(parseTime(peer.LastHandshakeTime))
 	cfg.Transfer = C.CString(parseTraffic(peer.ReceiveBytes, peer.TransmitBytes))
 	return cfg
 }
@@ -218,6 +222,9 @@ func freeConfig(cfg *C.ConfigResponse) {
 		if cfg.PeerPersistentKeepalive != nil {
 			C.free(unsafe.Pointer(cfg.PeerPersistentKeepalive))
 		}
+		if cfg.PeerPresharedKey != nil {
+			C.free(unsafe.Pointer(cfg.PeerPresharedKey))
+		}
 		C.free(unsafe.Pointer(cfg))
 	}
 }
@@ -242,8 +249,8 @@ func freeString(str *C.char) {
 	}
 }
 
-func parseConfig(interfaceName string) (string, string, string) {
-	var address, dns, alive string
+func parseConfig(interfaceName string) (string, string, string, string) {
+	var address, dns, alive, psk string
 
 	paths := []string{
 		filepath.Join("/etc/wireguard/" + interfaceName + ".conf"),
@@ -266,10 +273,13 @@ func parseConfig(interfaceName string) (string, string, string) {
 			if bytes.HasPrefix(line, []byte("PersistentKeepalive = ")) {
 				alive = string(bytes.TrimPrefix(line, []byte("PersistentKeepalive = ")))
 			}
+			if bytes.HasPrefix(line, []byte("PresharedKey = ")) {
+				psk = string(bytes.TrimPrefix(line, []byte("PresharedKey = ")))
+			}
 		}
 	}
 
-	return address, dns, alive
+	return address, dns, alive, psk
 }
 
 func parseKeys(interfaceName string) (string, string) {
@@ -308,14 +318,53 @@ func parseKeys(interfaceName string) (string, string) {
 	return "", ""
 }
 
-// NOTE: (heycatch) the old variant via 'time.Parse' is removed,
-// and implemented using strings.Builder.
-func parseTime(handshake string) string {
-	var b strings.Builder
-	b.Grow(12)
-	b.WriteString(handshake[11:19])
-	b.WriteString(handshake[len(handshake)-4:])
-	return b.String()
+func parseTime(handshake time.Time) string {
+	if handshake.IsZero() {
+		return "never"
+	}
+
+	diff := time.Since(handshake)
+	if diff < time.Second {
+		return "now"
+	}
+
+	days := int(diff.Hours() / 24)
+	hours := int(diff.Hours()) % 24
+	minutes := int(diff.Minutes()) % 60
+	seconds := int(diff.Seconds()) % 60
+
+	var buf strings.Builder
+	first := true
+
+	addPart := func(value int, unit string) bool {
+		if value == 0 {
+			return false
+		}
+		if !first {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(strconv.Itoa(value))
+		buf.WriteString(" ")
+		buf.WriteString(unit)
+		if value != 1 {
+			buf.WriteString("s")
+		}
+		first = false
+		return true
+	}
+
+	hasParts := false
+	hasParts = addPart(days, "day") || hasParts
+	hasParts = addPart(hours, "hour") || hasParts
+	hasParts = addPart(minutes, "minute") || hasParts
+	hasParts = addPart(seconds, "second") || hasParts
+
+	if !hasParts {
+		return "now"
+	}
+
+	buf.WriteString(" ago")
+	return buf.String()
 }
 
 func parseTraffic(receive, transmit int64) string {
