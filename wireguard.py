@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
   QScrollArea,
   QSpacerItem,
   QSystemTrayIcon,
-  QStyle
+  QStyle,
+  QSizePolicy
 )
 from PySide6.QtGui import (
   QIcon,
@@ -642,9 +643,7 @@ class TunnelConfigWidget(QWidget):
 
     self.field_widget = {}
 
-    interface_group = QGroupBox(f"Interface: {name}")
-    interface_group.setStyleSheet(
-      """
+    group_style = """
       QGroupBox {
         border: 1px solid #ada9aa;
         margin-top: 10px;
@@ -655,18 +654,37 @@ class TunnelConfigWidget(QWidget):
         subcontrol-position: top left;
         left: 10px;
       }
-      """
-    )
+    """
+
+    interface_group = QGroupBox(f"Interface: {name}")
+    interface_group.setStyleSheet(group_style)
     interface_layout = QVBoxLayout()
     interface_layout.setContentsMargins(10, 10, 10, 10)
     interface_layout.setSpacing(5)
 
+    inteface_fields = [
+      ("Public key:  ", config.get("interface_pub_key", "")),
+      ("Listen port:  ", str(
+        config.get(
+          "interface_listen_port"
+        )) if config.get("interface_listen_port", 0) else ""),
+      ("Addresses:  ", config.get("interface_address", "")),
+      ("DNS servers:  ", config.get("interface_dns", ""))
+    ]
+
+    interface_label_width = []
+    for label_text, value in inteface_fields:
+      if value: interface_label_width.append(self.fontMetrics().horizontalAdvance(label_text))
+    interface_max_width = max(interface_label_width)
+    interface_max_length = max(len(field[0]) if field[1] else 0 for field in inteface_fields)
+
     status_layout = QHBoxLayout()
-    status_label = QLabel("Status:")
-    status_label.setFixedWidth(80)
-    status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+    status_label = QLabel("Status:  ")
+    status_label.setFixedWidth(interface_max_width)
+    status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    status_label.setFixedHeight(20)
     self.status_indicator = QLabel()
-    self.status_indicator.setFixedSize(12, 12)
+    self.status_indicator.setFixedSize(11, 11)
     self.status_indicator.setStyleSheet(
       f"background-color: {'#4CAF50' if is_active else '#808080'}; border-radius: 5px;"
     )
@@ -677,30 +695,41 @@ class TunnelConfigWidget(QWidget):
     status_layout.addStretch()
     interface_layout.addLayout(status_layout)
 
-    inteface_fields = [
-      ("Public Key:", config.get("interface_pub_key", "")),
-      ("Listen Port:", str(
-        config.get(
-          "interface_listen_port"
-        )) if config.get("interface_listen_port", 0) else ""),
-      ("Address:", config.get("interface_address", "")),
-      ("DNS:", config.get("interface_dns", ""))
-    ]
     for label_text, value in inteface_fields:
+      if not value: continue
+
       field_layout = QHBoxLayout()
       label = QLabel(label_text)
-      label.setFixedWidth(80)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight)
-      if value:
-        value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
-        value_edit.setReadOnly(True)
-        field_layout.addWidget(label)
-        field_layout.addWidget(value_edit)
-        interface_layout.addLayout(field_layout)
+      label.setFixedWidth(interface_max_width)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+
+      value_edit = QTextEdit(value)
+      value_edit.setReadOnly(True)
+      value_edit.setFrameStyle(QFrame.NoFrame)
+      value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      value_edit.setAlignment(Qt.AlignmentFlag.AlignTop)
+      """
+      NOTE: (heycatch) we use QTextEdit for convenient line wrapping,
+      but it has an internal frame that needs to be removed for correct
+      display. To do this, we we use 'document().setDocumentMargin(0)' and
+      a fixed length in 'setMaximumHeight' for normal bottom maring.
+      TODO: (heycatch) find a more dynamic and
+      convenient way besides 'setMaximumHeight'.
+      """
+      value_edit.document().setDocumentMargin(0)
+      if is_active and (len(value) >= 44 and interface_max_length >= 19) or len(value) >= 63:
+        value_edit.setMaximumHeight(30)
+      else:
+        value_edit.setMaximumHeight(20)
+      value_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+      value_edit.setStyleSheet("background-color: #fbfbfb;")
+
+      field_layout.addWidget(label)
+      field_layout.addWidget(value_edit)
+      interface_layout.addLayout(field_layout)
 
     button_layout = QHBoxLayout()
-    button_layout.addSpacerItem(QSpacerItem(85, 0))
+    button_layout.addSpacerItem(QSpacerItem(interface_max_width + 5, 0))
     self.active_button = QPushButton("Activate" if not is_active else "Deactivate")
     self.active_button.setFixedSize(100, 25)
     self.active_button.setStyleSheet(
@@ -715,58 +744,70 @@ class TunnelConfigWidget(QWidget):
       }
       """
     )
-
     button_layout.addWidget(self.active_button)
     button_layout.addStretch()
     interface_layout.addLayout(button_layout)
-
     interface_group.setLayout(interface_layout)
 
     peer_group = QGroupBox("Peer")
-    peer_group.setStyleSheet(
-      """
-      QGroupBox {
-        border: 1px solid #ada9aa;
-        margin-top: 10px;
-        font-size: 12px;
-      }
-      QGroupBox:title {
-        subcontrol-origin: margin;
-        subcontrol-position: top left;
-        left: 10px;
-      }
-      """
-    )
+    peer_group.setStyleSheet(group_style)
     peer_layout = QVBoxLayout()
     peer_layout.setContentsMargins(10, 10, 10, 10)
     peer_layout.setSpacing(5)
+
     peer_fields = [
-      ("Public Key:", config.get("peer_pub_key", "")),
-      ("Allowed IPs:", config.get("peer_allowed_ips", "")),
-      ("Endpoint:", config.get("peer_endpoint_address", "")),
-      ("P_Keepalive:", config.get("peer_keep_alive", "")),
-      ("Last_HS:", stats.get("last_handshake", "")),
-      ("Transfer:", stats.get("transfer", ""))
+      ("Public key:  ", config.get("peer_pub_key", "")),
+      # TODO: (heycatch) add support "Preshared key".
+      ("Allowed IPs:  ", config.get("peer_allowed_ips", "")),
+      ("Endpoint:  ", config.get("peer_endpoint_address", "")),
+      ("Persistent keepalive:  ", config.get("peer_keep_alive", "")),
+      ("Latest handshake:  ", stats.get("last_handshake", "")),
+      ("Transfer:  ", stats.get("transfer", ""))
     ]
+
+    peer_label_widths = []
     for label_text, value in peer_fields:
+      if value: peer_label_widths.append(self.fontMetrics().horizontalAdvance(label_text))
+    peer_max_width = max(peer_label_widths)
+    peer_max_length = max(len(field[0]) if field[1] else 0 for field in peer_fields)
+
+    for label_text, value in peer_fields:
+      if not value: continue
+
       field_layout = QHBoxLayout()
-
       label = QLabel(label_text)
-      label.setFixedWidth(80)
-      label.setAlignment(Qt.AlignmentFlag.AlignRight)
+      label.setFixedWidth(peer_max_width)
+      label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
-      if value:
-        value_edit = QLineEdit(value)
-        value_edit.setStyleSheet("QLineEdit { border: none; background-color: #fbfbfb; }")
-        value_edit.setReadOnly(True)
+      value_edit = QTextEdit(value)
+      value_edit.setReadOnly(True)
+      value_edit.setFrameStyle(QFrame.NoFrame)
+      value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+      value_edit.setAlignment(Qt.AlignmentFlag.AlignTop)
+      """
+      NOTE: (heycatch) we use QTextEdit for convenient line wrapping,
+      but it has an internal frame that needs to be removed for correct
+      display. To do this, we we use 'document().setDocumentMargin(0)' and
+      a fixed length in 'setMaximumHeight' for normal bottom maring.
+      TODO: (heycatch) find a more dynamic and
+      convenient way besides 'setMaximumHeight'.
+      """
+      value_edit.document().setDocumentMargin(0)
+      if is_active and (len(value) >= 44 and peer_max_length >= 19) or len(value) >= 63:
+        value_edit.setMaximumHeight(30)
+      else:
+        value_edit.setMaximumHeight(20)
+      value_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+      value_edit.setStyleSheet("background-color: #fbfbfb;")
 
-        field_layout.addWidget(label)
-        field_layout.addWidget(value_edit)
+      field_layout.addWidget(label)
+      field_layout.addWidget(value_edit)
 
-        if label_text in ("Last_HS:", "Transfer:"):
-          self.field_widget[label_text] = value_edit
+      if label_text in ("Latest handshake:  ", "Transfer:  "):
+        self.field_widget[label_text] = value_edit
 
-        peer_layout.addLayout(field_layout)
+      peer_layout.addLayout(field_layout)
+
     peer_group.setLayout(peer_layout)
 
     self.layout.addWidget(interface_group)
@@ -786,10 +827,10 @@ class TunnelConfigWidget(QWidget):
 
     stats = self.wireguard.read_stats(self.name)
     if stats:
-      if "Last_HS:" in self.field_widget:
-        self.field_widget["Last_HS:"].setText(stats.get("last_handshake", ""))
-      if "Transfer:" in self.field_widget:
-        self.field_widget["Transfer:"].setText(stats.get("transfer", ""))
+      if "Latest handshake:  " in self.field_widget:
+        self.field_widget["Latest handshake:  "].setText(stats.get("last_handshake", ""))
+      if "Transfer:  " in self.field_widget:
+        self.field_widget["Transfer:  "].setText(stats.get("transfer", ""))
 
 class MainWindow(QMainWindow):
   def __init__(self):
@@ -1125,6 +1166,13 @@ class MainWindow(QMainWindow):
     sender: QWidget = None
   ) -> None:
     menu = QMenu(self)
+
+    """
+    NOTE: (heycatch) this condition is required when the tunnel is active
+    in order to correctly press the "Activate/Deactivate" button.
+    """
+    if not from_button and not tunnel_name and self.selected_tunnel:
+      tunnel_name = self.selected_tunnel
 
     self.selected_tunnel = tunnel_name
 
