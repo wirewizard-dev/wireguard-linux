@@ -31,6 +31,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
 
+make mod
 make build
 make install
 make clear
@@ -67,6 +68,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
 
+make mod
 make sdk
 make dev
 ```

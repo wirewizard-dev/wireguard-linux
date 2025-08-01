@@ -35,3 +35,13 @@ test:
 
 fmt:
 	gofmt -w .
+
+mod:
+	go mod download
+	go mod verify
+
+cache:
+	go clean -cache
+
+modcache:
+	go clean -modcache
