@@ -853,12 +853,18 @@ class MainWindow(QMainWindow):
 
     self.tray_icon = QSystemTrayIcon(self)
     self.tray_icon.setIcon(QIcon(self.default_icon))
-    tray_menu = QMenu()
-    open_acton = tray_menu.addAction("Show")
+    self.tray_menu = QMenu()
+    self.tray_tunnel_action = self.tray_menu.addAction("No tunnel selected")
+    self.tray_tunnel_action.setEnabled(False)
+    self.tray_toggle_action = self.tray_menu.addAction("Activate")
+    self.tray_toggle_action.triggered.connect(self.tray_toggle_tunnel)
+    self.tray_toggle_action.setVisible(False)
+    self.tray_menu.addSeparator()
+    open_acton = self.tray_menu.addAction("Show")
     open_acton.triggered.connect(self.showNormal)
-    exit_action = tray_menu.addAction("Exit")
+    exit_action = self.tray_menu.addAction("Exit")
     exit_action.triggered.connect(self.quit_application)
-    self.tray_icon.setContextMenu(tray_menu)
+    self.tray_icon.setContextMenu(self.tray_menu)
     self.tray_icon.activated.connect(self.tray_icon_activated)
     self.tray_icon.show()
 
@@ -881,6 +887,27 @@ class MainWindow(QMainWindow):
     self.tabs.setCurrentIndex(0)
 
     self.load_interfaces()
+
+  def update_tray_menu(self) -> None:
+    if not self.selected_tunnel:
+      self.tray_tunnel_action.setText("No tunnel selected")
+      self.tray_toggle_action.setVisible(False)
+      return
+
+    self.tray_tunnel_action.setText(f"Interface: {self.selected_tunnel}")
+
+    config = self.wireguard.read_config(self.selected_tunnel)
+
+    self.tray_toggle_action.setVisible(True)
+    self.tray_toggle_action.setText(
+      "Deactivate" if config.get("interface_listen_port", 0) != 0 else "Activate"
+    )
+
+  def tray_toggle_tunnel(self) -> None:
+    if not self.selected_tunnel: return
+
+    config = self.wireguard.read_config(self.selected_tunnel)
+    self.toggle_tunnel(config.get("interface_listen_port", 0) != 0)
 
   def setup_tunnels_tab(self) -> None:
     main_layout = QVBoxLayout()
@@ -1128,7 +1155,6 @@ class MainWindow(QMainWindow):
       self.left_layout.addWidget(button)
 
     self.set_icon()
-
     self.left_layout.addStretch()
 
   # NOTE: (heycatch) if logs exceed the 6MB limit, half of the old logs are cleaned up.
@@ -1159,6 +1185,7 @@ class MainWindow(QMainWindow):
     self.right_layout.addWidget(import_btn, alignment=Qt.AlignmentFlag.AlignCenter)
     self.right_layout.addStretch()
     self.right_panel.setLayout(self.right_layout)
+    self.update_tray_menu()
 
   def show_context_menu(
     self,
@@ -1304,7 +1331,6 @@ class MainWindow(QMainWindow):
       self.right_panel.setLayout(self.right_layout)
 
       self.set_icon()
-
       return
 
     is_active = config.get("interface_listen_port", 0) != 0
@@ -1332,6 +1358,7 @@ class MainWindow(QMainWindow):
     )
     self.edit_button.clicked.connect(lambda: self.edit_tunnel())
     self.bottom_layout.addWidget(self.edit_button)
+    self.update_tray_menu()
 
   def edit_tunnel(self) -> None:
     tunnel_name = None
@@ -1406,8 +1433,8 @@ class MainWindow(QMainWindow):
         widget.update()
 
     self.set_icon()
-
     self.show_tunnel(self.selected_tunnel)
+    self.update_tray_menu()
 
   def remove_tunnel(self) -> None:
     if not self.selected_tunnels and not self.selected_tunnel: return
